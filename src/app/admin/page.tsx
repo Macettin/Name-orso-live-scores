@@ -8,24 +8,23 @@ import { useTournamentData } from "@/hooks/use-tournament-data";
 
 export default function AdminPage() {
   const router = useRouter();
-  const { authLoading, profile, supabaseEnabled } = useTournamentData();
-  const canAccessAdmin = profile?.role === "admin" || profile?.role === "scorer";
+  const { authLoading, canScore, supabaseEnabled } = useTournamentData();
 
   useEffect(() => {
     if (!supabaseEnabled || authLoading) {
       return;
     }
 
-    if (!canAccessAdmin) {
+    if (!canScore) {
       router.replace("/login?next=/admin");
     }
-  }, [authLoading, canAccessAdmin, router, supabaseEnabled]);
+  }, [authLoading, canScore, router, supabaseEnabled]);
 
   if (supabaseEnabled && authLoading) {
     return <PageHeader title="Checking access" description="Loading your Supabase session." />;
   }
 
-  if (supabaseEnabled && !canAccessAdmin) {
+  if (supabaseEnabled && !canScore) {
     return <PageHeader title="Admin access required" description="Redirecting to login." />;
   }
 

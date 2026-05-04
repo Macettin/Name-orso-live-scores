@@ -26,7 +26,11 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
     return null;
   }
 
-  const { data: userData } = await supabase.auth.getUser();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) {
+    throw userError;
+  }
+
   if (!userData.user) {
     return null;
   }
@@ -86,6 +90,12 @@ type PlayerRow = {
   digs: number | null;
 };
 
+type MatchStatRow = {
+  player_id: string | null;
+  stat_key: string;
+  stat_value: number | null;
+};
+
 type MatchRow = {
   id: string;
   home_team_id: string;
@@ -113,7 +123,11 @@ function mapTeam(row: TeamRow): Team {
   };
 }
 
-function mapPlayer(row: PlayerRow): Player {
+const statKeys = ["points", "assists", "rebounds", "blocks", "aces", "digs"] as const;
+
+function mapPlayer(row: PlayerRow, matchStatsByPlayer: Map<string, Partial<Player["stats"]>>): Player {
+  const matchStats = matchStatsByPlayer.get(row.id);
+
   return {
     id: row.id,
     teamId: row.team_id,
@@ -121,12 +135,12 @@ function mapPlayer(row: PlayerRow): Player {
     number: row.number,
     position: row.position ?? "",
     stats: {
-      points: row.points ?? 0,
-      assists: row.assists ?? 0,
-      rebounds: row.rebounds ?? 0,
-      blocks: row.blocks ?? 0,
-      aces: row.aces ?? 0,
-      digs: row.digs ?? 0
+      points: matchStats?.points ?? row.points ?? 0,
+      assists: matchStats?.assists ?? row.assists ?? 0,
+      rebounds: matchStats?.rebounds ?? row.rebounds ?? 0,
+      blocks: matchStats?.blocks ?? row.blocks ?? 0,
+      aces: matchStats?.aces ?? row.aces ?? 0,
+      digs: matchStats?.digs ?? row.digs ?? 0
     }
   };
 }
@@ -157,15 +171,34 @@ export async function fetchSupabaseTournamentData(): Promise<TournamentData> {
     throw new Error("Supabase is not configured.");
   }
 
-  const [{ data: teamRows, error: teamError }, { data: playerRows, error: playerError }] = await Promise.all([
+  const [
+    { data: teamRows, error: teamError },
+    { data: playerRows, error: playerError },
+    { data: matchStatRows, error: matchStatError }
+  ] = await Promise.all([
     supabase.from("teams").select("id,name,sport,group_name,city,coach,colors").order("name"),
-    supabase.from("players").select("id,team_id,name,number,position,points,assists,rebounds,blocks,aces,digs").order("name")
+    supabase.from("players").select("id,team_id,name,number,position,points,assists,rebounds,blocks,aces,digs").order("name"),
+    supabase.from("match_stats").select("player_id,stat_key,stat_value")
   ]);
 
   if (teamError) throw teamError;
   if (playerError) throw playerError;
+  if (matchStatError) throw matchStatError;
 
   const teams = ((teamRows ?? []) as TeamRow[]).map(mapTeam);
+  const matchStatsByPlayer = new Map<string, Partial<Player["stats"]>>();
+
+  for (const row of (matchStatRows ?? []) as MatchStatRow[]) {
+    if (!row.player_id || !statKeys.includes(row.stat_key as (typeof statKeys)[number])) {
+      continue;
+    }
+
+    const statKey = row.stat_key as keyof Player["stats"];
+    const stats = matchStatsByPlayer.get(row.player_id) ?? {};
+    stats[statKey] = (stats[statKey] ?? 0) + (row.stat_value ?? 0);
+    matchStatsByPlayer.set(row.player_id, stats);
+  }
+
   const { data: matchRows, error: matchError } = await supabase
     .from("matches")
     .select("id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,report")
@@ -176,7 +209,7 @@ export async function fetchSupabaseTournamentData(): Promise<TournamentData> {
 
   return {
     teams,
-    players: ((playerRows ?? []) as PlayerRow[]).map(mapPlayer),
+    players: ((playerRows ?? []) as PlayerRow[]).map((row) => mapPlayer(row, matchStatsByPlayer)),
     matches: ((matchRows ?? []) as MatchRow[]).map((row) => mapMatch(row, teams))
   };
 }

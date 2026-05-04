@@ -32,10 +32,10 @@ export default function CourtPage() {
             <Card key={match.id}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-500">
+                  <p className="text-sm font-semibold text-slate-400">
                     {match.court} - {match.sport}
                   </p>
-                  <h2 className="mt-2 text-xl font-bold text-slate-950">
+                  <h2 className="mt-2 text-xl font-bold text-slate-900">
                     {home?.name} vs {away?.name}
                   </h2>
                 </div>

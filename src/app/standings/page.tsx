@@ -13,7 +13,7 @@ export default function StandingsPage() {
       <PageHeader title="Group standings" description="Tournament tables calculated from shared match results." />
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3">Sport</th>
@@ -31,7 +31,7 @@ export default function StandingsPage() {
               const team = getTeam(data, row.teamId);
               return (
                 <tr key={row.teamId}>
-                  <td className="px-4 py-3 font-semibold text-slate-950">{team?.name}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{team?.name}</td>
                   <td className="px-4 py-3 text-slate-600">{team?.sport}</td>
                   <td className="px-4 py-3 text-slate-600">{team?.group}</td>
                   <td className="px-4 py-3 text-right">{row.played}</td>

@@ -64,7 +64,7 @@ const emptyMatch: MatchForm = {
 };
 
 function labelClass() {
-  return "text-sm font-semibold text-slate-700";
+  return "text-sm font-semibold text-slate-600";
 }
 
 function inputClass() {
@@ -74,8 +74,8 @@ function inputClass() {
 function sectionTitle(title: string, description: string) {
   return (
     <div>
-      <h2 className="text-lg font-bold text-slate-950">{title}</h2>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+      <p className="mt-1 text-sm text-slate-400">{description}</p>
     </div>
   );
 }
@@ -237,7 +237,7 @@ export function AdminScoreForm() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
         {lastError ?? message}
       </div>
 
@@ -251,8 +251,8 @@ export function AdminScoreForm() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-950">Signed in</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-lg font-bold text-slate-900">Signed in</h2>
+              <p className="mt-1 text-sm text-slate-400">
                 {profile.email} - {profile.role}
               </p>
             </div>
@@ -305,7 +305,7 @@ export function AdminScoreForm() {
             <input value={teamForm.colors} onChange={(event) => setTeamForm({ ...teamForm, colors: event.target.value })} className={inputClass()} />
           </label>
           <div className="flex items-end md:col-span-2">
-            <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               {teamForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
               {teamForm.id ? "Save team" : "Add team"}
             </button>
@@ -314,8 +314,8 @@ export function AdminScoreForm() {
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {data.teams.map((team) => (
             <div key={team.id} className="rounded-lg border border-slate-200 p-4">
-              <p className="font-bold text-slate-950">{team.name}</p>
-              <p className="text-sm text-slate-500">
+              <p className="font-bold text-slate-900">{team.name}</p>
+              <p className="text-sm text-slate-400">
                 {team.sport} - {team.group}
               </p>
               <div className="mt-3 flex gap-2">
@@ -373,7 +373,7 @@ export function AdminScoreForm() {
             </label>
           ))}
           <div className="flex items-end md:col-span-2">
-            <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               {playerForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
               {playerForm.id ? "Save player" : "Add player"}
             </button>
@@ -384,10 +384,10 @@ export function AdminScoreForm() {
             const team = data.teams.find((item) => item.id === player.teamId);
             return (
               <div key={player.id} className="rounded-lg border border-slate-200 p-4">
-                <p className="font-bold text-slate-950">
+                <p className="font-bold text-slate-900">
                   #{player.number} {player.name}
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-400">
                   {team?.name} - {player.stats.points} pts
                 </p>
                 <div className="mt-3 flex gap-2">
@@ -477,7 +477,7 @@ export function AdminScoreForm() {
             <input value={matchForm.report ?? ""} onChange={(event) => setMatchForm({ ...matchForm, report: event.target.value })} className={inputClass()} />
           </label>
           <div className="flex items-end">
-            <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               {matchForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
               {matchForm.id ? "Save match" : "Add match"}
             </button>
@@ -489,10 +489,10 @@ export function AdminScoreForm() {
             const away = data.teams.find((team) => team.id === match.awayTeamId);
             return (
               <div key={match.id} className="rounded-lg border border-slate-200 p-4">
-                <p className="font-bold text-slate-950">
+                <p className="font-bold text-slate-900">
                   {home?.name} vs {away?.name}
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-400">
                   {match.date} {match.time} - {match.court} - {match.status} - {match.homeScore}-{match.awayScore}
                 </p>
                 <div className="mt-3 flex gap-2">
@@ -510,6 +510,7 @@ export function AdminScoreForm() {
           })}
         </div>
       </section>
+
         </>
       ) : null}
 
@@ -552,13 +553,13 @@ export function AdminScoreForm() {
             <input name="periodLabel" defaultValue={selectedScoreMatch?.periodLabel ?? ""} className={inputClass()} />
           </label>
           <div className="flex items-end md:col-span-3">
-            <button className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               <Save size={16} aria-hidden="true" />
               Save score
             </button>
           </div>
         </form>
-        {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-500">No matches are available.</p> : null}
+        {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-400">No matches are available.</p> : null}
       </section>
       ) : null}
     </div>

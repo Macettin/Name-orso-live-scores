@@ -6,37 +6,6 @@ export type TournamentData = {
   matches: Match[];
 };
 
-export const defaultTournamentData: TournamentData = {
-  teams: [
-    { id: "orso-vc", name: "Orso VC", sport: "Volleyball", group: "Group A", city: "Istanbul", coach: "Mina Arslan", colors: "Emerald / White" },
-    { id: "ankara-spikes", name: "Ankara Spikes", sport: "Volleyball", group: "Group A", city: "Ankara", coach: "Deniz Kaya", colors: "Navy / Lime" },
-    { id: "izmir-waves", name: "Izmir Waves", sport: "Volleyball", group: "Group B", city: "Izmir", coach: "Selin Bora", colors: "Blue / White" },
-    { id: "bursa-blockers", name: "Bursa Blockers", sport: "Volleyball", group: "Group B", city: "Bursa", coach: "Kerem Uslu", colors: "Black / Gold" },
-    { id: "orso-hoops", name: "Orso Hoops", sport: "Basketball", group: "Group A", city: "Istanbul", coach: "Levent Sari", colors: "Emerald / Black" },
-    { id: "capital-five", name: "Capital Five", sport: "Basketball", group: "Group A", city: "Ankara", coach: "Ece Yilmaz", colors: "Red / White" },
-    { id: "aegean-rim", name: "Aegean Rim", sport: "Basketball", group: "Group B", city: "Izmir", coach: "Burak Tunc", colors: "Sky / Navy" },
-    { id: "marmara-drive", name: "Marmara Drive", sport: "Basketball", group: "Group B", city: "Kocaeli", coach: "Aylin Keskin", colors: "Orange / Black" }
-  ],
-  players: [
-    { id: "p-01", teamId: "orso-vc", name: "Lara Demir", number: 7, position: "Outside Hitter", stats: { points: 42, aces: 6, digs: 28, blocks: 4 } },
-    { id: "p-02", teamId: "orso-vc", name: "Nehir Ak", number: 12, position: "Middle Blocker", stats: { points: 31, aces: 2, digs: 8, blocks: 11 } },
-    { id: "p-03", teamId: "ankara-spikes", name: "Ipek Can", number: 4, position: "Setter", stats: { points: 18, aces: 5, digs: 24, blocks: 2 } },
-    { id: "p-04", teamId: "orso-hoops", name: "Mert Ozan", number: 11, position: "Guard", stats: { points: 61, assists: 19, rebounds: 12 } },
-    { id: "p-05", teamId: "orso-hoops", name: "Cem Eren", number: 22, position: "Forward", stats: { points: 48, assists: 8, rebounds: 27, blocks: 5 } },
-    { id: "p-06", teamId: "capital-five", name: "Arda Koc", number: 3, position: "Guard", stats: { points: 55, assists: 22, rebounds: 9 } },
-    { id: "p-07", teamId: "aegean-rim", name: "Efe Deniz", number: 9, position: "Wing", stats: { points: 44, assists: 11, rebounds: 20 } },
-    { id: "p-08", teamId: "izmir-waves", name: "Duru Ekin", number: 15, position: "Opposite", stats: { points: 37, aces: 4, digs: 14, blocks: 6 } }
-  ],
-  matches: [
-    { id: "m-1001", sport: "Volleyball", group: "Group A", court: "Court 1", hallSlug: "main-hall", date: "2026-05-03", time: "10:00", status: "Live", homeTeamId: "orso-vc", awayTeamId: "ankara-spikes", homeScore: 2, awayScore: 1, periodLabel: "Set 4", report: "Orso VC turned the second set with stronger serve pressure and late blocking from the middle." },
-    { id: "m-1002", sport: "Basketball", group: "Group A", court: "Court 2", hallSlug: "main-hall", date: "2026-05-03", time: "11:30", status: "Live", homeTeamId: "orso-hoops", awayTeamId: "capital-five", homeScore: 54, awayScore: 49, periodLabel: "Q3 02:14", report: "Orso Hoops are controlling the paint, while Capital Five remain close through transition threes." },
-    { id: "m-1003", sport: "Volleyball", group: "Group B", court: "Court 3", hallSlug: "east-hall", date: "2026-05-03", time: "13:00", status: "Scheduled", homeTeamId: "izmir-waves", awayTeamId: "bursa-blockers", homeScore: 0, awayScore: 0, periodLabel: "Warmup" },
-    { id: "m-1004", sport: "Basketball", group: "Group B", court: "Court 4", hallSlug: "east-hall", date: "2026-05-03", time: "14:30", status: "Scheduled", homeTeamId: "aegean-rim", awayTeamId: "marmara-drive", homeScore: 0, awayScore: 0, periodLabel: "Pregame" },
-    { id: "m-0998", sport: "Volleyball", group: "Group A", court: "Court 1", hallSlug: "main-hall", date: "2026-05-02", time: "17:00", status: "Final", homeTeamId: "orso-vc", awayTeamId: "bursa-blockers", homeScore: 3, awayScore: 0, periodLabel: "Final", report: "Orso VC opened the tournament with a clean sweep built on efficient side-out play." },
-    { id: "m-0999", sport: "Basketball", group: "Group B", court: "Court 2", hallSlug: "main-hall", date: "2026-05-02", time: "19:00", status: "Final", homeTeamId: "aegean-rim", awayTeamId: "capital-five", homeScore: 78, awayScore: 74, periodLabel: "Final", report: "Aegean Rim closed the game on an 11-3 run after switching to a compact zone defense." }
-  ]
-};
-
 export function slugify(value: string) {
   return value
     .toLowerCase()

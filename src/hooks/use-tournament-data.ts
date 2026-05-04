@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteMatch,
   deletePlayer,
   deleteTeam,
-  defaultTournamentData,
   type TournamentData,
   updateMatchScore,
   upsertMatch,
@@ -29,60 +28,86 @@ import {
 } from "@/lib/supabase";
 import type { Match, MatchStatus, Player, Team, UserProfile } from "@/lib/types";
 
+const emptyTournamentData: TournamentData = {
+  teams: [],
+  players: [],
+  matches: []
+};
+
 export function useTournamentData() {
-  const [data, setData] = useState<TournamentData>(defaultTournamentData);
+  const [data, setData] = useState<TournamentData>(emptyTournamentData);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(() => isSupabaseConfigured());
   const [supabaseEnabled] = useState(isSupabaseConfigured());
-  const [lastError, setLastError] = useState<string | null>(supabaseEnabled ? null : "Supabase is not configured. Showing seed data.");
+  const [lastError, setLastError] = useState<string | null>(supabaseEnabled ? null : "Supabase is not configured.");
+  const refreshInFlight = useRef<Promise<void> | null>(null);
 
-  const refresh = useCallback(async () => {
+  const syncProfile = useCallback(async () => {
     if (!supabaseEnabled) {
-      setData(defaultTournamentData);
+      setProfile(null);
+      setAuthLoading(false);
       return;
     }
 
     try {
-      const nextData = await fetchSupabaseTournamentData();
-      setData(nextData);
-      setLastError(null);
-    } catch (error) {
-      setLastError(error instanceof Error ? error.message : "Could not load Supabase data.");
+      setProfile(await getCurrentProfile());
+    } catch {
+      setProfile(null);
+    } finally {
+      setAuthLoading(false);
     }
+  }, [supabaseEnabled]);
+
+  const refresh = useCallback(async () => {
+    if (!supabaseEnabled) {
+      setData(emptyTournamentData);
+      return;
+    }
+
+    if (!refreshInFlight.current) {
+      refreshInFlight.current = fetchSupabaseTournamentData()
+        .then((nextData) => {
+          setData(nextData);
+          setLastError(null);
+        })
+        .catch((error) => {
+          setLastError(error instanceof Error ? error.message : "Could not load Supabase data.");
+        })
+        .finally(() => {
+          refreshInFlight.current = null;
+        });
+    }
+
+    await refreshInFlight.current;
   }, [supabaseEnabled]);
 
   useEffect(() => {
     queueMicrotask(() => {
       void refresh();
+      void syncProfile();
     });
 
     if (!supabaseEnabled) {
       return;
     }
 
-    async function syncProfile() {
-      try {
-        setProfile(await getCurrentProfile());
-      } catch {
-        setProfile(null);
-      } finally {
-        setAuthLoading(false);
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return;
+    }
+
+    for (const channel of supabase.getChannels()) {
+      if (channel.topic === "realtime:orso-live-score-data") {
+        void supabase.removeChannel(channel);
       }
     }
 
-    void syncProfile();
-
-    const refreshTimer = window.setInterval(() => {
-      void refresh();
-    }, 5000);
-
-    const supabase = getSupabaseClient();
-    const authSubscription = supabase?.auth.onAuthStateChange(() => {
+    let realtimeChannelRemoved = false;
+    const authSubscription = supabase.auth.onAuthStateChange(() => {
       void syncProfile();
-      void refresh();
     });
     const realtimeChannel = supabase
-      ?.channel("orso-live-score-data")
+      .channel("orso-live-score-data")
       .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void refresh())
@@ -90,13 +115,13 @@ export function useTournamentData() {
       .subscribe();
 
     return () => {
-      window.clearInterval(refreshTimer);
-      authSubscription?.data.subscription.unsubscribe();
-      if (realtimeChannel) {
-        void supabase?.removeChannel(realtimeChannel);
+      authSubscription.data.subscription.unsubscribe();
+      if (!realtimeChannelRemoved) {
+        realtimeChannelRemoved = true;
+        void supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [refresh, supabaseEnabled]);
+  }, [refresh, supabaseEnabled, syncProfile]);
 
   async function persist(operation: () => Promise<void>, optimisticData: TournamentData) {
     setData(optimisticData);

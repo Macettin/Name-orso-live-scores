@@ -7,7 +7,7 @@ export function PlayerStatTable({ players, teams }: { players: Player[]; teams: 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
           <tr>
             <th className="px-4 py-3">Player</th>
             <th className="px-4 py-3">Team</th>
@@ -25,7 +25,7 @@ export function PlayerStatTable({ players, teams }: { players: Player[]; teams: 
             const team = getTeam(lookupData, player.teamId);
             return (
               <tr key={player.id}>
-                <td className="px-4 py-3 font-semibold text-slate-950">
+                <td className="px-4 py-3 font-semibold text-slate-900">
                   #{player.number} {player.name}
                 </td>
                 <td className="px-4 py-3 text-slate-600">{team?.name}</td>
