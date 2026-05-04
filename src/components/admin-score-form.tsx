@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { createId } from "@/lib/data-store";
 import type { Match, MatchStatus, Player, Sport, Team } from "@/lib/types";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -81,7 +81,22 @@ function sectionTitle(title: string, description: string) {
 }
 
 export function AdminScoreForm() {
-  const { data, saveTeam, removeTeam, savePlayer, removePlayer, saveMatch, removeMatch, saveScore } = useTournamentData();
+  const {
+    data,
+    profile,
+    supabaseEnabled,
+    lastError,
+    canManageAll,
+    canScore,
+    logout,
+    saveTeam,
+    removeTeam,
+    savePlayer,
+    removePlayer,
+    saveMatch,
+    removeMatch,
+    saveScore
+  } = useTournamentData();
   const [teamForm, setTeamForm] = useState<TeamForm>(emptyTeam);
   const [playerForm, setPlayerForm] = useState<PlayerForm>(() => ({ ...emptyPlayer, teamId: data.teams[0]?.id ?? "" }));
   const [matchForm, setMatchForm] = useState<MatchForm>(() => ({
@@ -93,7 +108,8 @@ export function AdminScoreForm() {
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
-  const selectedScoreMatch = data.matches.find((match) => match.id === selectedScoreMatchId) ?? data.matches[0];
+  const scoreMatches = data.matches;
+  const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
 
   function submitTeam(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -221,8 +237,35 @@ export function AdminScoreForm() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{message}</div>
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+        {lastError ?? message}
+      </div>
 
+      {!supabaseEnabled ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to `.env.local` to save data.
+        </div>
+      ) : null}
+
+      {profile ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">Signed in</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {profile.email} - {profile.role}
+              </p>
+            </div>
+            <button onClick={() => void logout()} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <LogOut size={16} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {canManageAll ? (
+        <>
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Teams", "Create, edit, and delete teams. Deleting a team also removes its players and matches.")}
@@ -467,14 +510,17 @@ export function AdminScoreForm() {
           })}
         </div>
       </section>
+        </>
+      ) : null}
 
+      {canScore ? (
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         {sectionTitle("Scores", "Fast score update panel for live scoring.")}
         <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}`} onSubmit={submitScore} className="mt-5 grid gap-4 md:grid-cols-5">
           <label className="md:col-span-2">
             <span className={labelClass()}>Match</span>
             <select value={selectedScoreMatch?.id ?? ""} onChange={(event) => setSelectedScoreMatchId(event.target.value)} className={inputClass()}>
-              {data.matches.map((match) => {
+              {scoreMatches.map((match) => {
                 const home = data.teams.find((team) => team.id === match.homeTeamId);
                 const away = data.teams.find((team) => team.id === match.awayTeamId);
                 return (
@@ -512,7 +558,9 @@ export function AdminScoreForm() {
             </button>
           </div>
         </form>
+        {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-500">No matches are available.</p> : null}
       </section>
+      ) : null}
     </div>
   );
 }

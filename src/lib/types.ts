@@ -1,5 +1,6 @@
 export type Sport = "Volleyball" | "Basketball";
 export type MatchStatus = "Scheduled" | "Live" | "Final";
+export type UserRole = "admin" | "scorer" | "viewer";
 
 export type Team = {
   id: string;
@@ -52,4 +53,10 @@ export type Standing = {
   pointsFor: number;
   pointsAgainst: number;
   tournamentPoints: number;
+};
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  role: UserRole;
 };

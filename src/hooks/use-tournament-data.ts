@@ -5,105 +5,134 @@ import {
   deleteMatch,
   deletePlayer,
   deleteTeam,
-  getTournamentData,
-  saveTournamentData,
-  TOURNAMENT_DATA_EVENT,
-  TOURNAMENT_DATA_STORAGE_KEY,
+  defaultTournamentData,
   type TournamentData,
   updateMatchScore,
   upsertMatch,
   upsertPlayer,
   upsertTeam
 } from "@/lib/data-store";
-import type { Match, MatchStatus, Player, Team } from "@/lib/types";
-
-const TOURNAMENT_DATA_API = "/api/tournament";
-
-async function fetchTournamentData(signal?: AbortSignal): Promise<TournamentData> {
-  const response = await fetch(TOURNAMENT_DATA_API, { cache: "no-store", signal });
-
-  if (!response.ok) {
-    throw new Error("Could not load tournament data.");
-  }
-
-  return response.json() as Promise<TournamentData>;
-}
+import {
+  deleteSupabaseMatch,
+  deleteSupabasePlayer,
+  deleteSupabaseTeam,
+  fetchSupabaseTournamentData,
+  getCurrentProfile,
+  getSupabaseClient,
+  isSupabaseConfigured,
+  saveSupabaseMatch,
+  saveSupabasePlayer,
+  saveSupabaseScore,
+  saveSupabaseTeam,
+  signInWithEmail,
+  signOut
+} from "@/lib/supabase";
+import type { Match, MatchStatus, Player, Team, UserProfile } from "@/lib/types";
 
 export function useTournamentData() {
-  const [data, setData] = useState<TournamentData>(() => getTournamentData());
+  const [data, setData] = useState<TournamentData>(defaultTournamentData);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(() => isSupabaseConfigured());
+  const [supabaseEnabled] = useState(isSupabaseConfigured());
+  const [lastError, setLastError] = useState<string | null>(supabaseEnabled ? null : "Supabase is not configured. Showing seed data.");
+
+  const refresh = useCallback(async () => {
+    if (!supabaseEnabled) {
+      setData(defaultTournamentData);
+      return;
+    }
+
+    try {
+      const nextData = await fetchSupabaseTournamentData();
+      setData(nextData);
+      setLastError(null);
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : "Could not load Supabase data.");
+    }
+  }, [supabaseEnabled]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    queueMicrotask(() => {
+      void refresh();
+    });
 
-    function syncData() {
-      setData(getTournamentData());
+    if (!supabaseEnabled) {
+      return;
     }
 
-    async function syncServerData() {
+    async function syncProfile() {
       try {
-        const nextData = await fetchTournamentData(controller.signal);
-        saveTournamentData(nextData);
-        setData(nextData);
+        setProfile(await getCurrentProfile());
       } catch {
-        syncData();
+        setProfile(null);
+      } finally {
+        setAuthLoading(false);
       }
     }
 
-    function syncStorageData(event: StorageEvent) {
-      if (event.key === TOURNAMENT_DATA_STORAGE_KEY) {
-        syncData();
-      }
-    }
+    void syncProfile();
 
-    void syncServerData();
     const refreshTimer = window.setInterval(() => {
-      void syncServerData();
+      void refresh();
     }, 5000);
 
-    window.addEventListener(TOURNAMENT_DATA_EVENT, syncData);
-    window.addEventListener("storage", syncStorageData);
+    const supabase = getSupabaseClient();
+    const authSubscription = supabase?.auth.onAuthStateChange(() => {
+      void syncProfile();
+      void refresh();
+    });
+    const realtimeChannel = supabase
+      ?.channel("orso-live-score-data")
+      .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_stats" }, () => void refresh())
+      .subscribe();
 
     return () => {
-      controller.abort();
       window.clearInterval(refreshTimer);
-      window.removeEventListener(TOURNAMENT_DATA_EVENT, syncData);
-      window.removeEventListener("storage", syncStorageData);
+      authSubscription?.data.subscription.unsubscribe();
+      if (realtimeChannel) {
+        void supabase?.removeChannel(realtimeChannel);
+      }
     };
-  }, []);
+  }, [refresh, supabaseEnabled]);
 
-  const commit = useCallback((nextData: TournamentData) => {
-    saveTournamentData(nextData);
-    setData(nextData);
+  async function persist(operation: () => Promise<void>, optimisticData: TournamentData) {
+    setData(optimisticData);
 
-    void fetch(TOURNAMENT_DATA_API, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextData)
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error("Could not save tournament data.");
-        }
+    if (!supabaseEnabled) {
+      setLastError("Supabase is not configured. Changes were not saved.");
+      return;
+    }
 
-        const savedData = (await response.json()) as TournamentData;
-        saveTournamentData(savedData);
-        setData(savedData);
-      })
-      .catch(() => {
-        setData(nextData);
-      });
-  }, []);
+    try {
+      await operation();
+      await refresh();
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : "Could not save Supabase data.");
+      await refresh();
+    }
+  }
 
   return {
     data,
-    setData: commit,
-    saveTeam: (team: Team) => commit(upsertTeam(data, team)),
-    removeTeam: (teamId: string) => commit(deleteTeam(data, teamId)),
-    savePlayer: (player: Player) => commit(upsertPlayer(data, player)),
-    removePlayer: (playerId: string) => commit(deletePlayer(data, playerId)),
-    saveMatch: (match: Match) => commit(upsertMatch(data, match)),
-    removeMatch: (matchId: string) => commit(deleteMatch(data, matchId)),
+    profile,
+    authLoading,
+    supabaseEnabled,
+    lastError,
+    canManageAll: profile?.role === "admin",
+    canScore: profile?.role === "admin" || profile?.role === "scorer",
+    login: signInWithEmail,
+    logout: signOut,
+    refresh,
+    saveTeam: (team: Team) => persist(() => saveSupabaseTeam(team), upsertTeam(data, team)),
+    removeTeam: (teamId: string) => persist(() => deleteSupabaseTeam(teamId), deleteTeam(data, teamId)),
+    savePlayer: (player: Player) => persist(() => saveSupabasePlayer(player), upsertPlayer(data, player)),
+    removePlayer: (playerId: string) => persist(() => deleteSupabasePlayer(playerId), deletePlayer(data, playerId)),
+    saveMatch: (match: Match) => persist(() => saveSupabaseMatch(data, match), upsertMatch(data, match)),
+    removeMatch: (matchId: string) => persist(() => deleteSupabaseMatch(matchId), deleteMatch(data, matchId)),
     saveScore: (matchId: string, score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus }) =>
-      commit(updateMatchScore(data, matchId, score))
+      persist(() => saveSupabaseScore(matchId, score), updateMatchScore(data, matchId, score))
   };
 }

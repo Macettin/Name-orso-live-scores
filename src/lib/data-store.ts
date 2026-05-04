@@ -6,9 +6,6 @@ export type TournamentData = {
   matches: Match[];
 };
 
-export const TOURNAMENT_DATA_STORAGE_KEY = "orso-live-score-cms-data";
-export const TOURNAMENT_DATA_EVENT = "orso-live-score-cms-data-updated";
-
 export const defaultTournamentData: TournamentData = {
   teams: [
     { id: "orso-vc", name: "Orso VC", sport: "Volleyball", group: "Group A", city: "Istanbul", coach: "Mina Arslan", colors: "Emerald / White" },
@@ -40,10 +37,6 @@ export const defaultTournamentData: TournamentData = {
   ]
 };
 
-function canUseStorage() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
-
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -55,38 +48,6 @@ export function slugify(value: string) {
 export function createId(prefix: string, label: string) {
   const slug = slugify(label) || "item";
   return `${prefix}-${slug}-${Date.now().toString(36)}`;
-}
-
-export function getTournamentData(): TournamentData {
-  if (!canUseStorage()) {
-    return defaultTournamentData;
-  }
-
-  try {
-    const stored = window.localStorage.getItem(TOURNAMENT_DATA_STORAGE_KEY);
-    if (!stored) {
-      window.localStorage.setItem(TOURNAMENT_DATA_STORAGE_KEY, JSON.stringify(defaultTournamentData));
-      return defaultTournamentData;
-    }
-
-    const parsed = JSON.parse(stored) as Partial<TournamentData>;
-    return {
-      teams: Array.isArray(parsed.teams) ? parsed.teams : defaultTournamentData.teams,
-      players: Array.isArray(parsed.players) ? parsed.players : defaultTournamentData.players,
-      matches: Array.isArray(parsed.matches) ? parsed.matches : defaultTournamentData.matches
-    };
-  } catch {
-    return defaultTournamentData;
-  }
-}
-
-export function saveTournamentData(data: TournamentData) {
-  if (!canUseStorage()) {
-    return;
-  }
-
-  window.localStorage.setItem(TOURNAMENT_DATA_STORAGE_KEY, JSON.stringify(data));
-  window.dispatchEvent(new CustomEvent(TOURNAMENT_DATA_EVENT, { detail: data }));
 }
 
 export function getTeam(data: TournamentData, teamId: string) {
