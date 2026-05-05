@@ -2,10 +2,20 @@
 
 import { QRCodeSVG } from "qrcode.react";
 
-export function MatchQrCode({ value }: { value: string }) {
+function toPublicUrl(value: string) {
+  if (/^https?:\/\//i.test(value) || typeof window === "undefined") {
+    return value;
+  }
+
+  return new URL(value, window.location.origin).toString();
+}
+
+export function MatchQrCode({ value, size = 168 }: { value: string; size?: number }) {
+  const publicUrl = toPublicUrl(value);
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <QRCodeSVG value={value} size={168} level="M" includeMargin />
+      <QRCodeSVG value={publicUrl} size={size} level="M" includeMargin />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/ui";
+import { PageHeader, TeamLogo } from "@/components/ui";
 import { buildStandings, getTeam } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
@@ -15,6 +15,7 @@ export default function StandingsPage() {
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
             <tr>
+              <th className="px-4 py-3">#</th>
               <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3">Sport</th>
               <th className="px-4 py-3">Group</th>
@@ -27,11 +28,21 @@ export default function StandingsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {standings.map((row) => {
+            {standings.map((row, index) => {
               const team = getTeam(data, row.teamId);
               return (
                 <tr key={row.teamId}>
-                  <td className="px-4 py-3 font-semibold text-slate-900">{team?.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100">
+                      {index + 1}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">
+                    <div className="flex items-center gap-3">
+                      <TeamLogo team={team} size="h-9 w-9" />
+                      <span>{team?.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{team?.sport}</td>
                   <td className="px-4 py-3 text-slate-600">{team?.group}</td>
                   <td className="px-4 py-3 text-right">{row.played}</td>

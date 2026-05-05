@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type Player, type PlayerStatKey, type Team, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type Player, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 
 let browserClient: SupabaseClient | null = null;
@@ -72,6 +72,7 @@ type TeamRow = {
   name: string;
   sport: Team["sport"];
   group_name: string;
+  logo_url: string | null;
   city: string | null;
   coach: string | null;
   colors: string | null;
@@ -117,6 +118,8 @@ type MatchRow = {
   away_score: number | null;
   period_label: string | null;
   match_minute: string | null;
+  clock_label: string | null;
+  clock_running: boolean | null;
   report: string | null;
 };
 
@@ -140,6 +143,22 @@ type TournamentRow = {
   start_date: string | null;
   end_date: string | null;
   status: TournamentStatus;
+  logo_url: string | null;
+  primary_color: string | null;
+  sponsor_name: string | null;
+  sponsor_logo_url: string | null;
+};
+
+type TeamAdminRow = {
+  user_id: string;
+  team_id: string;
+  tournament_id: string;
+  created_at: string | null;
+};
+
+type ProfileEmailRow = {
+  id: string;
+  email: string | null;
 };
 
 function mapTournament(row: TournamentRow): Tournament {
@@ -150,7 +169,11 @@ function mapTournament(row: TournamentRow): Tournament {
     location: row.location ?? "",
     startDate: row.start_date ?? "",
     endDate: row.end_date ?? "",
-    status: row.status
+    status: row.status,
+    logoUrl: row.logo_url ?? undefined,
+    primaryColor: row.primary_color ?? undefined,
+    sponsorName: row.sponsor_name ?? undefined,
+    sponsorLogoUrl: row.sponsor_logo_url ?? undefined
   };
 }
 
@@ -161,6 +184,7 @@ function mapTeam(row: TeamRow): Team {
     name: row.name,
     sport: row.sport,
     group: row.group_name,
+    logoUrl: row.logo_url ?? undefined,
     city: row.city ?? "",
     coach: row.coach ?? "",
     colors: row.colors ?? ""
@@ -222,6 +246,8 @@ function mapMatch(row: MatchRow, teams: Team[]): Match {
     awayScore: row.away_score ?? 0,
     periodLabel: row.period_label ?? "",
     matchMinute: row.match_minute ?? undefined,
+    clockLabel: row.clock_label ?? undefined,
+    clockRunning: row.clock_running ?? false,
     report: row.report ?? undefined
   };
 }
@@ -252,8 +278,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     { data: playerRows, error: playerError },
     { data: matchStatRows, error: matchStatError }
   ] = await Promise.all([
-    supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status").order("start_date").order("name"),
-    supabase.from("teams").select("id,tournament_id,name,sport,group_name,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
+    supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
+    supabase.from("teams").select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
     supabase
       .from("players")
       .select("id,tournament_id,team_id,name,number,position,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
@@ -287,7 +313,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   ] = await Promise.all([
     supabase
     .from("matches")
-      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,report")
+      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,report")
     .eq("tournament_id", tournamentId)
     .order("date")
       .order("time"),
@@ -308,6 +334,75 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     matches: ((matchRows ?? []) as MatchRow[]).map((row) => mapMatch(row, teams)),
     events: ((eventRows ?? []) as MatchEventRow[]).map(mapMatchEvent)
   };
+}
+
+export async function fetchSupabaseMyTeamAdmins(): Promise<TeamAdmin[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const { data, error } = await supabase.from("team_admins").select("user_id,team_id,tournament_id");
+  if (error) throw error;
+
+  return ((data ?? []) as TeamAdminRow[]).map((row) => ({
+    userId: row.user_id,
+    teamId: row.team_id,
+    tournamentId: row.tournament_id
+  }));
+}
+
+export async function fetchSupabaseTeamAdminAssignments(): Promise<TeamAdminAssignment[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("team_admins")
+    .select("user_id,team_id,tournament_id,created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const rows = (data ?? []) as TeamAdminRow[];
+  const userIds = Array.from(new Set(rows.map((row) => row.user_id)));
+  const emailsByUserId = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const { data: profileRows, error: profileError } = await supabase.from("profiles").select("id,email").in("id", userIds);
+    if (profileError) throw profileError;
+
+    for (const profile of (profileRows ?? []) as ProfileEmailRow[]) {
+      emailsByUserId.set(profile.id, profile.email ?? "");
+    }
+  }
+
+  return rows.map((row) => ({
+    userId: row.user_id,
+    teamId: row.team_id,
+    tournamentId: row.tournament_id,
+    email: emailsByUserId.get(row.user_id) || undefined,
+    createdAt: row.created_at ?? undefined
+  }));
+}
+
+export async function deleteSupabaseTeamAdminAssignment(userId: string, teamId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("team_admins").delete().eq("user_id", userId).eq("team_id", teamId);
+  if (error) throw error;
+}
+
+export async function assignSupabaseClubAdmin(email: string, teamId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.rpc("assign_club_admin", {
+    p_email: email,
+    p_team_id: teamId
+  });
+  if (error) throw error;
 }
 
 export async function saveSupabaseTournament(tournament: Tournament) {
@@ -344,6 +439,7 @@ export async function saveSupabaseTeam(team: Team, tournamentId = "main-tourname
     name: team.name,
     sport: team.sport,
     group_name: team.group,
+    logo_url: team.logoUrl ?? null,
     city: team.city,
     coach: team.coach,
     colors: team.colors
@@ -400,6 +496,22 @@ export async function uploadSupabasePlayerPhoto(playerId: string, file: File) {
   return data.publicUrl;
 }
 
+export async function uploadSupabaseTeamLogo(teamId: string, file: File) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const path = `${teamId}/${Date.now().toString(36)}.${extension}`;
+  const { error } = await supabase.storage.from("team-logos").upload(path, file, {
+    cacheControl: "3600",
+    upsert: true
+  });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from("team-logos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function deleteSupabasePlayer(playerId: string) {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -427,6 +539,8 @@ export async function saveSupabaseMatch(data: TournamentData, match: Match, tour
     away_score: normalized.awayScore,
     period_label: normalized.periodLabel,
     match_minute: normalized.matchMinute ?? null,
+    clock_label: normalized.clockLabel ?? null,
+    clock_running: normalized.clockRunning ?? false,
     report: normalized.report ?? null
   });
   if (error) throw error;
@@ -442,7 +556,7 @@ export async function deleteSupabaseMatch(matchId: string) {
 
 export async function saveSupabaseScore(
   matchId: string,
-  score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string }
+  score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string; clockLabel?: string; clockRunning?: boolean }
 ) {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -454,6 +568,8 @@ export async function saveSupabaseScore(
       away_score: score.awayScore,
       period_label: score.periodLabel,
       match_minute: score.matchMinute || null,
+      clock_label: score.clockLabel || null,
+      clock_running: score.clockRunning ?? false,
       status: score.status
     })
     .eq("id", matchId);

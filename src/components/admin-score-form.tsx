@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { createId } from "@/lib/data-store";
@@ -22,7 +23,7 @@ import {
 } from "@/lib/types";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
-type TeamForm = Pick<Team, "id" | "name" | "group" | "sport" | "city" | "coach" | "colors">;
+type TeamForm = Pick<Team, "id" | "name" | "group" | "sport" | "logoUrl" | "city" | "coach" | "colors">;
 type PlayerForm = {
   id: string;
   name: string;
@@ -42,7 +43,7 @@ type PlayerForm = {
 };
 type MatchForm = Pick<
   Match,
-  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "report"
+  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "report"
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
@@ -62,6 +63,7 @@ const emptyTeam: TeamForm = {
   name: "",
   group: "Group A",
   sport: "Volleyball",
+  logoUrl: "",
   city: "",
   coach: "",
   colors: ""
@@ -97,6 +99,8 @@ const emptyMatch: MatchForm = {
   awayScore: 0,
   periodLabel: "Pregame",
   matchMinute: "",
+  clockLabel: "",
+  clockRunning: false,
   report: ""
 };
 
@@ -140,6 +144,7 @@ export function AdminScoreForm() {
     saveTournament,
     removeTournament,
     saveTeam,
+    uploadTeamLogo,
     removeTeam,
     savePlayer,
     uploadPlayerPhoto,
@@ -149,10 +154,14 @@ export function AdminScoreForm() {
     saveScore,
     savePlayerMatchStat,
     saveEvent,
-    removeEvent
+    removeEvent,
+    assignClubAdmin,
+    removeClubAdminAssignment,
+    clubAdminAssignments
   } = useTournamentData();
   const [tournamentForm, setTournamentForm] = useState<TournamentForm>(emptyTournament);
   const [teamForm, setTeamForm] = useState<TeamForm>(emptyTeam);
+  const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
   const [playerForm, setPlayerForm] = useState<PlayerForm>(() => ({ ...emptyPlayer, teamId: data.teams[0]?.id ?? "" }));
   const [playerPhotoFile, setPlayerPhotoFile] = useState<File | null>(null);
   const [matchForm, setMatchForm] = useState<MatchForm>(() => ({
@@ -163,9 +172,18 @@ export function AdminScoreForm() {
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [eventForm, setEventForm] = useState<EventForm>(() => ({ ...emptyEvent, matchId: data.matches[0]?.id ?? "" }));
+  const [clubAdminEmail, setClubAdminEmail] = useState("");
+  const [clubAdminTeamId, setClubAdminTeamId] = useState("");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
+  const courtOptions = useMemo(
+    () =>
+      Array.from(new Map(data.matches.map((match) => [match.hallSlug, { hallSlug: match.hallSlug, court: match.court }])).values()).sort((first, second) =>
+        first.court.localeCompare(second.court)
+      ),
+    [data.matches]
+  );
   const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
   const scoreMatches = data.matches;
   const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
@@ -208,19 +226,33 @@ export function AdminScoreForm() {
     setMessage(`Saved tournament: ${tournament.name}`);
   }
 
-  function submitTeam(event: React.FormEvent<HTMLFormElement>) {
+  async function submitTeam(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!teamForm.name.trim()) {
       return;
     }
 
+    const teamId = teamForm.id || createId("team", teamForm.name);
+    let logoUrl = teamForm.logoUrl || undefined;
+
+    if (teamLogoFile) {
+      try {
+        logoUrl = await uploadTeamLogo(teamId, teamLogoFile);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not upload team logo.");
+        return;
+      }
+    }
+
     const team: Team = {
       ...teamForm,
-      id: teamForm.id || createId("team", teamForm.name),
-      name: teamForm.name.trim()
+      id: teamId,
+      name: teamForm.name.trim(),
+      logoUrl
     };
-    saveTeam(team);
+    await saveTeam(team);
     setTeamForm(emptyTeam);
+    setTeamLogoFile(null);
     setMessage(`Saved team: ${team.name}`);
   }
 
@@ -311,6 +343,8 @@ export function AdminScoreForm() {
       awayScore: Number(formData.get("awayScore") ?? 0),
       periodLabel: String(formData.get("periodLabel") ?? ""),
       matchMinute: String(formData.get("matchMinute") ?? ""),
+      clockLabel: String(formData.get("clockLabel") ?? ""),
+      clockRunning: formData.get("clockRunning") === "on",
       status: String(formData.get("status") ?? "Scheduled") as MatchStatus
     };
 
@@ -340,6 +374,35 @@ export function AdminScoreForm() {
     saveEvent(matchEvent);
     setEventForm({ ...emptyEvent, matchId });
     setMessage(`Saved event: ${eventForm.type.replace("_", " ")} at ${matchEvent.minute}`);
+  }
+
+  async function submitClubAdminAssignment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const teamId = clubAdminTeamId || teamOptions[0]?.id;
+    const email = clubAdminEmail.trim();
+
+    if (!email || !teamId) {
+      return;
+    }
+
+    try {
+      await assignClubAdmin(email, teamId);
+      const team = data.teams.find((item) => item.id === teamId);
+      setClubAdminEmail("");
+      setClubAdminTeamId("");
+      setMessage(`Assigned ${email} as club admin for ${team?.name ?? "team"}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not assign club admin.");
+    }
+  }
+
+  async function removeClubAdmin(userId: string, teamId: string, email?: string) {
+    try {
+      await removeClubAdminAssignment(userId, teamId);
+      setMessage(`Removed club admin assignment for ${email || userId}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove club admin assignment.");
+    }
   }
 
   function editPlayer(player: Player) {
@@ -395,6 +458,8 @@ export function AdminScoreForm() {
       awayScore: match.awayScore,
       periodLabel: match.periodLabel,
       matchMinute: match.matchMinute ?? "",
+      clockLabel: match.clockLabel ?? "",
+      clockRunning: match.clockRunning ?? false,
       report: match.report ?? ""
     });
   }
@@ -527,7 +592,13 @@ export function AdminScoreForm() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Teams", "Create, edit, and delete teams. Deleting a team also removes its players and matches.")}
           {teamForm.id ? (
-            <button onClick={() => setTeamForm(emptyTeam)} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+            <button
+              onClick={() => {
+                setTeamForm(emptyTeam);
+                setTeamLogoFile(null);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+            >
               <X size={16} aria-hidden="true" />
               Cancel edit
             </button>
@@ -564,6 +635,15 @@ export function AdminScoreForm() {
             <span className={labelClass()}>Colors</span>
             <input value={teamForm.colors} onChange={(event) => setTeamForm({ ...teamForm, colors: event.target.value })} className={inputClass()} />
           </label>
+          <label>
+            <span className={labelClass()}>Team logo</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setTeamLogoFile(event.target.files?.[0] ?? null)}
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
+            />
+          </label>
           <div className="flex items-end md:col-span-2">
             <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               {teamForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
@@ -579,7 +659,13 @@ export function AdminScoreForm() {
                 {team.sport} - {team.group}
               </p>
               <div className="mt-3 flex gap-2">
-                <button onClick={() => setTeamForm(team)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                <button
+                  onClick={() => {
+                    setTeamForm({ ...team, logoUrl: team.logoUrl ?? "" });
+                    setTeamLogoFile(null);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold"
+                >
                   <Pencil size={14} aria-hidden="true" />
                   Edit
                 </button>
@@ -683,6 +769,43 @@ export function AdminScoreForm() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("QR links", "Public match and court QR destinations for printing and sharing.")}
+          <Link href="/qr-print" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
+            Printable QR page
+          </Link>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="font-black text-slate-900">Match pages</h3>
+            <div className="mt-3 grid gap-2">
+              {data.matches.map((match) => {
+                const home = data.teams.find((team) => team.id === match.homeTeamId);
+                const away = data.teams.find((team) => team.id === match.awayTeamId);
+                return (
+                  <Link key={match.id} href={`/matches/${match.id}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                    {home?.name} vs {away?.name} - {match.court}
+                  </Link>
+                );
+              })}
+              {data.matches.length === 0 ? <p className="text-sm text-slate-400">No matches available.</p> : null}
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="font-black text-slate-900">Court pages</h3>
+            <div className="mt-3 grid gap-2">
+              {courtOptions.map((court) => (
+                <Link key={court.hallSlug} href={`/court/${court.hallSlug}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                  {court.court}
+                </Link>
+              ))}
+              {courtOptions.length === 0 ? <p className="text-sm text-slate-400">No courts available.</p> : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Matches", "Create, edit, and delete match records. Scores can also be edited here or in the score panel.")}
           {matchForm.id ? (
             <button
@@ -750,6 +873,10 @@ export function AdminScoreForm() {
           <label>
             <span className={labelClass()}>Match minute</span>
             <input value={matchForm.matchMinute ?? ""} onChange={(event) => setMatchForm({ ...matchForm, matchMinute: event.target.value })} className={inputClass()} placeholder="12' or 45+2'" />
+          </label>
+          <label>
+            <span className={labelClass()}>Clock label</span>
+            <input value={matchForm.clockLabel ?? ""} onChange={(event) => setMatchForm({ ...matchForm, clockLabel: event.target.value })} className={inputClass()} placeholder="Q1 08:42, Set 1, HT" />
           </label>
           <label className="md:col-span-2">
             <span className={labelClass()}>Report</span>
@@ -893,7 +1020,7 @@ export function AdminScoreForm() {
       <>
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         {sectionTitle("Scores", "Fast score update panel for live scoring.")}
-        <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}-${selectedScoreMatch?.matchMinute ?? ""}`} onSubmit={submitScore} className="mt-5 grid gap-4 md:grid-cols-5">
+        <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}-${selectedScoreMatch?.matchMinute ?? ""}-${selectedScoreMatch?.clockLabel ?? ""}-${selectedScoreMatch?.clockRunning ?? false}`} onSubmit={submitScore} className="mt-5 grid gap-4 md:grid-cols-5">
           <label className="md:col-span-2">
             <span className={labelClass()}>Match</span>
             <select value={selectedScoreMatch?.id ?? ""} onChange={(event) => setSelectedScoreMatchId(event.target.value)} className={inputClass()}>
@@ -932,7 +1059,15 @@ export function AdminScoreForm() {
             <span className={labelClass()}>Match minute</span>
             <input name="matchMinute" defaultValue={selectedScoreMatch?.matchMinute ?? ""} className={inputClass()} placeholder="12' or 45+2'" />
           </label>
-          <div className="flex items-end md:col-span-2">
+          <label>
+            <span className={labelClass()}>Clock label</span>
+            <input name="clockLabel" defaultValue={selectedScoreMatch?.clockLabel ?? ""} className={inputClass()} placeholder="Q1 08:42, Set 1, HT" />
+          </label>
+          <label className="flex items-end gap-2 pb-2">
+            <input name="clockRunning" type="checkbox" defaultChecked={selectedScoreMatch?.clockRunning ?? false} className="h-4 w-4 rounded border-slate-300" />
+            <span className={labelClass()}>Clock running</span>
+          </label>
+          <div className="flex items-end">
             <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               <Save size={16} aria-hidden="true" />
               Save score
@@ -1017,6 +1152,88 @@ export function AdminScoreForm() {
         )}
       </section>
       </>
+      ) : null}
+      {canManageAll ? (
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Club admins", "Assign an existing user to manage one team roster and branding.")}
+        </div>
+        <form onSubmit={submitClubAdminAssignment} className="grid gap-4 md:grid-cols-4">
+          <label className="md:col-span-2">
+            <span className={labelClass()}>User email</span>
+            <input
+              type="email"
+              value={clubAdminEmail}
+              onChange={(event) => setClubAdminEmail(event.target.value)}
+              className={inputClass()}
+              placeholder="club@example.com"
+            />
+          </label>
+          <label>
+            <span className={labelClass()}>Team</span>
+            <select value={clubAdminTeamId || teamOptions[0]?.id || ""} onChange={(event) => setClubAdminTeamId(event.target.value)} className={inputClass()}>
+              {teamOptions.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              <Save size={16} aria-hidden="true" />
+              Assign club admin
+            </button>
+          </div>
+        </form>
+        <p className="mt-3 text-sm text-slate-400">The user must already have a Supabase auth account. This assignment also changes their profile role to club_admin.</p>
+        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100 text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">User email</th>
+                  <th className="px-4 py-3">Assigned team</th>
+                  <th className="px-4 py-3">Tournament</th>
+                  <th className="px-4 py-3">Created date</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {clubAdminAssignments.map((assignment) => {
+                  const team = data.teams.find((item) => item.id === assignment.teamId);
+                  const tournament = data.tournaments.find((item) => item.id === assignment.tournamentId);
+                  return (
+                    <tr key={`${assignment.userId}-${assignment.teamId}`}>
+                      <td className="px-4 py-3 font-semibold text-slate-900">{assignment.email || assignment.userId}</td>
+                      <td className="px-4 py-3 text-slate-600">{team?.name ?? assignment.teamId}</td>
+                      <td className="px-4 py-3 text-slate-600">{tournament?.name ?? assignment.tournamentId}</td>
+                      <td className="px-4 py-3 text-slate-600">{assignment.createdAt ? new Date(assignment.createdAt).toLocaleString() : "-"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void removeClubAdmin(assignment.userId, assignment.teamId, assignment.email)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {clubAdminAssignments.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-4 text-slate-400" colSpan={5}>
+                      No club admin assignments yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
       ) : null}
     </div>
   );

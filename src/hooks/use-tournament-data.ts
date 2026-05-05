@@ -17,11 +17,15 @@ import {
   upsertTournament
 } from "@/lib/data-store";
 import {
+  assignSupabaseClubAdmin,
   deleteSupabaseMatch,
   deleteSupabaseMatchEvent,
   deleteSupabasePlayer,
   deleteSupabaseTeam,
+  deleteSupabaseTeamAdminAssignment,
   deleteSupabaseTournament,
+  fetchSupabaseMyTeamAdmins,
+  fetchSupabaseTeamAdminAssignments,
   fetchSupabaseTournamentData,
   getCurrentProfile,
   getSupabaseClient,
@@ -35,9 +39,10 @@ import {
   saveSupabaseTournament,
   signInWithEmail,
   signOut,
-  uploadSupabasePlayerPhoto
+  uploadSupabasePlayerPhoto,
+  uploadSupabaseTeamLogo
 } from "@/lib/supabase";
-import type { Match, MatchEvent, MatchStatus, Player, PlayerStatKey, Team, Tournament, UserProfile } from "@/lib/types";
+import type { Match, MatchEvent, MatchStatus, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, UserProfile } from "@/lib/types";
 
 const emptyTournamentData: TournamentData = {
   tournaments: [],
@@ -62,6 +67,8 @@ export function useTournamentData() {
   const [data, setData] = useState<TournamentData>(emptyTournamentData);
   const [selectedTournamentId, setSelectedTournamentIdState] = useState(getInitialTournamentId);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [teamAdminAssignments, setTeamAdminAssignments] = useState<string[]>([]);
+  const [clubAdminAssignments, setClubAdminAssignments] = useState<TeamAdminAssignment[]>([]);
   const [authLoading, setAuthLoading] = useState(() => isSupabaseConfigured());
   const [supabaseEnabled] = useState(isSupabaseConfigured());
   const [lastError, setLastError] = useState<string | null>(supabaseEnabled ? null : "Supabase is not configured.");
@@ -75,9 +82,24 @@ export function useTournamentData() {
     }
 
     try {
-      setProfile(await getCurrentProfile());
+      const nextProfile = await getCurrentProfile();
+      setProfile(nextProfile);
+
+      if (nextProfile?.role === "club_admin") {
+        const assignments = await fetchSupabaseMyTeamAdmins();
+        setTeamAdminAssignments(assignments.map((assignment) => assignment.teamId));
+        setClubAdminAssignments([]);
+      } else if (nextProfile?.role === "admin") {
+        setTeamAdminAssignments([]);
+        setClubAdminAssignments(await fetchSupabaseTeamAdminAssignments());
+      } else {
+        setTeamAdminAssignments([]);
+        setClubAdminAssignments([]);
+      }
     } catch {
       setProfile(null);
+      setTeamAdminAssignments([]);
+      setClubAdminAssignments([]);
     } finally {
       setAuthLoading(false);
     }
@@ -153,6 +175,7 @@ export function useTournamentData() {
       .on("postgres_changes", { event: "*", schema: "public", table: "match_stats" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_admins" }, () => void syncProfile())
       .subscribe();
 
     return () => {
@@ -200,6 +223,15 @@ export function useTournamentData() {
     }
   }
 
+  async function refreshClubAdminAssignments() {
+    if (!supabaseEnabled || profile?.role !== "admin") {
+      setClubAdminAssignments([]);
+      return;
+    }
+
+    setClubAdminAssignments(await fetchSupabaseTeamAdminAssignments());
+  }
+
   return {
     data,
     profile,
@@ -210,10 +242,22 @@ export function useTournamentData() {
     setSelectedTournamentId,
     canManageAll: profile?.role === "admin",
     canScore: profile?.role === "admin" || profile?.role === "scorer",
+    canManageClub: profile?.role === "club_admin",
+    clubAdminTeamIds: teamAdminAssignments,
+    clubAdminAssignments,
     login: signInWithEmail,
     logout: signOut,
     refresh,
+    assignClubAdmin: async (email: string, teamId: string) => {
+      await assignSupabaseClubAdmin(email, teamId);
+      await refreshClubAdminAssignments();
+    },
+    removeClubAdminAssignment: async (userId: string, teamId: string) => {
+      await deleteSupabaseTeamAdminAssignment(userId, teamId);
+      await refreshClubAdminAssignments();
+    },
     uploadPlayerPhoto: uploadSupabasePlayerPhoto,
+    uploadTeamLogo: uploadSupabaseTeamLogo,
     saveTournament: (tournament: Tournament) => persist(() => saveSupabaseTournament(tournament), upsertTournament(data, tournament)),
     removeTournament: (tournamentId: string) => {
       if (selectedTournamentId === tournamentId) {
@@ -239,7 +283,7 @@ export function useTournamentData() {
         upsertMatch(data, { ...match, tournamentId: match.tournamentId ?? selectedTournamentId })
       ),
     removeMatch: (matchId: string) => persist(() => deleteSupabaseMatch(matchId), deleteMatch(data, matchId)),
-    saveScore: (matchId: string, score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string }) =>
+    saveScore: (matchId: string, score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string; clockLabel?: string; clockRunning?: boolean }) =>
       persist(() => saveSupabaseScore(matchId, score), updateMatchScore(data, matchId, score)),
     savePlayerMatchStat: (matchId: string, playerId: string, statKey: PlayerStatKey, amount = 1) =>
       persist(() => saveSupabasePlayerMatchStat(matchId, playerId, statKey, amount), addPlayerMatchStat(data, matchId, playerId, statKey, amount)),

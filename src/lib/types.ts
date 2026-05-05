@@ -1,7 +1,7 @@
 export const sportOptions = ["Volleyball", "Basketball", "Football"] as const;
 export type Sport = (typeof sportOptions)[number];
 export type MatchStatus = "Scheduled" | "Live" | "Final";
-export type UserRole = "admin" | "scorer" | "viewer";
+export type UserRole = "admin" | "scorer" | "viewer" | "club_admin";
 export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
 export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
 export type TournamentSportType = (typeof tournamentSportOptions)[number];
@@ -33,6 +33,10 @@ export type Tournament = {
   startDate: string;
   endDate: string;
   status: TournamentStatus;
+  logoUrl?: string;
+  primaryColor?: string;
+  sponsorName?: string;
+  sponsorLogoUrl?: string;
 };
 
 export type Team = {
@@ -41,6 +45,7 @@ export type Team = {
   name: string;
   sport: Sport;
   group: string;
+  logoUrl?: string;
   city: string;
   coach: string;
   colors: string;
@@ -74,6 +79,8 @@ export type Match = {
   awayScore: number;
   periodLabel: string;
   matchMinute?: string;
+  clockLabel?: string;
+  clockRunning?: boolean;
   report?: string;
 };
 
@@ -103,4 +110,15 @@ export type UserProfile = {
   id: string;
   email: string;
   role: UserRole;
+};
+
+export type TeamAdmin = {
+  userId: string;
+  teamId: string;
+  tournamentId: string;
+};
+
+export type TeamAdminAssignment = TeamAdmin & {
+  email?: string;
+  createdAt?: string;
 };

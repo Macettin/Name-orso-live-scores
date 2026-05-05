@@ -106,7 +106,7 @@ export function deleteMatch(data: TournamentData, matchId: string): TournamentDa
 export function updateMatchScore(
   data: TournamentData,
   matchId: string,
-  score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string }
+  score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string; clockLabel?: string; clockRunning?: boolean }
 ): TournamentData {
   return {
     ...data,

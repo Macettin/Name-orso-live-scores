@@ -6,7 +6,7 @@ import { clsx } from "clsx";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { getTeam } from "@/lib/data-store";
 import type { Match, Team } from "@/lib/types";
-import { Card, StatusPill } from "./ui";
+import { Card, StatusPill, TeamLogo } from "./ui";
 
 function getFootballMatchTime(match: Match) {
   const rawLabel = (match.matchMinute || match.periodLabel).trim();
@@ -71,8 +71,9 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         </div>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
-        <Link href={`/teams/${home.id}`} className="min-w-0 truncate text-base font-bold text-slate-900 hover:text-blue-700">
-          {home.name}
+        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-3 text-base font-bold text-slate-900 hover:text-blue-700">
+          <TeamLogo team={home} size="h-10 w-10" />
+          <span className="truncate">{home.name}</span>
         </Link>
         <Link
           href={`/matches/${match.id}`}
@@ -83,8 +84,9 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         >
           {match.homeScore} - {match.awayScore}
         </Link>
-        <Link href={`/teams/${away.id}`} className="min-w-0 truncate text-right text-base font-bold text-slate-900 hover:text-blue-700">
-          {away.name}
+        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center justify-end gap-3 text-right text-base font-bold text-slate-900 hover:text-blue-700">
+          <span className="truncate">{away.name}</span>
+          <TeamLogo team={away} size="h-10 w-10" />
         </Link>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
@@ -99,6 +101,9 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           <span className="font-semibold text-slate-600">{match.periodLabel}</span>
         )}
         <div className="flex gap-3">
+          <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/matches/${match.id}`}>
+            Match QR
+          </Link>
           <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/matches/${match.id}`}>
             Report
           </Link>

@@ -10,14 +10,14 @@ export default function LoginPage() {
   const [nextPath] = useState(() =>
     typeof window === "undefined" ? "/admin" : new URLSearchParams(window.location.search).get("next") ?? "/admin"
   );
-  const { authLoading, canScore, login, supabaseEnabled } = useTournamentData();
+  const { authLoading, canScore, canManageClub, login, supabaseEnabled } = useTournamentData();
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (canScore) {
+    if (canScore || canManageClub) {
       router.replace(nextPath);
     }
-  }, [canScore, nextPath, router]);
+  }, [canManageClub, canScore, nextPath, router]);
 
   async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <PageHeader title="Login" description="Sign in as an admin or scorer to manage Orso Live Scores." />
+      <PageHeader title="Login" description="Sign in as an admin, scorer, or club admin to manage Orso Live Scores." />
       <section className="max-w-xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         {!supabaseEnabled ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">

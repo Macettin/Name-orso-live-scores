@@ -6,6 +6,10 @@ create table if not exists public.tournaments (
   start_date date,
   end_date date,
   status text not null default 'Live',
+  logo_url text,
+  primary_color text,
+  sponsor_name text,
+  sponsor_logo_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint tournaments_sport_type_check check (sport_type in ('Mixed', 'Volleyball', 'Basketball', 'Football')),
@@ -20,6 +24,11 @@ set name = excluded.name,
     sport_type = excluded.sport_type,
     updated_at = now();
 
+alter table public.tournaments add column if not exists logo_url text;
+alter table public.tournaments add column if not exists primary_color text;
+alter table public.tournaments add column if not exists sponsor_name text;
+alter table public.tournaments add column if not exists sponsor_logo_url text;
+
 drop trigger if exists tournaments_touch_updated_at on public.tournaments;
 create trigger tournaments_touch_updated_at before update on public.tournaments for each row execute function public.touch_updated_at();
 
@@ -27,6 +36,9 @@ alter table public.teams add column if not exists tournament_id text;
 alter table public.players add column if not exists tournament_id text;
 alter table public.matches add column if not exists tournament_id text;
 alter table public.match_stats add column if not exists tournament_id text;
+alter table public.teams add column if not exists logo_url text;
+alter table public.matches add column if not exists clock_label text;
+alter table public.matches add column if not exists clock_running boolean not null default false;
 
 update public.teams
 set tournament_id = 'main-tournament'

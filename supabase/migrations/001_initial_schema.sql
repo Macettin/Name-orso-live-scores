@@ -1,4 +1,4 @@
-create type public.app_role as enum ('admin', 'scorer', 'viewer');
+create type public.app_role as enum ('admin', 'scorer', 'viewer', 'club_admin');
 create type public.sport_type as enum ('Volleyball', 'Basketball', 'Football');
 create type public.match_status as enum ('Scheduled', 'Live', 'Final');
 
@@ -15,6 +15,7 @@ create table public.teams (
   name text not null,
   sport public.sport_type not null,
   group_name text not null,
+  logo_url text,
   city text,
   coach text,
   colors text,
@@ -54,6 +55,8 @@ create table public.matches (
   home_score integer not null default 0,
   away_score integer not null default 0,
   period_label text not null default 'Pregame',
+  clock_label text,
+  clock_running boolean not null default false,
   report text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -225,3 +228,19 @@ for update using (bucket_id = 'player-photos' and public.is_admin()) with check 
 
 create policy "admins delete player photos" on storage.objects
 for delete using (bucket_id = 'player-photos' and public.is_admin());
+
+insert into storage.buckets (id, name, public)
+values ('team-logos', 'team-logos', true)
+on conflict (id) do update set public = excluded.public;
+
+create policy "public read team logos" on storage.objects
+for select using (bucket_id = 'team-logos');
+
+create policy "admins upload team logos" on storage.objects
+for insert with check (bucket_id = 'team-logos' and public.is_admin());
+
+create policy "admins update team logos" on storage.objects
+for update using (bucket_id = 'team-logos' and public.is_admin()) with check (bucket_id = 'team-logos' and public.is_admin());
+
+create policy "admins delete team logos" on storage.objects
+for delete using (bucket_id = 'team-logos' and public.is_admin());

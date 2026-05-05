@@ -10,7 +10,9 @@ import { useTournamentData } from "@/hooks/use-tournament-data";
 export default function CourtPage() {
   const params = useParams<{ hallSlug: string }>();
   const { data } = useTournamentData();
-  const hallMatches = data.matches.filter((match) => match.hallSlug === params.hallSlug);
+  const hallMatches = data.matches
+    .filter((match) => match.hallSlug === params.hallSlug)
+    .sort((first, second) => `${first.date} ${first.time}`.localeCompare(`${second.date} ${second.time}`));
 
   if (hallMatches.length === 0) {
     return <PageHeader title="Court not found" description="No matches exist for this court in the tournament data." />;
@@ -20,10 +22,34 @@ export default function CourtPage() {
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+  const featuredMatch = hallMatches.find((match) => match.status === "Live") ?? hallMatches.find((match) => match.status === "Scheduled") ?? hallMatches[0];
+  const featuredHome = getTeam(data, featuredMatch.homeTeamId);
+  const featuredAway = getTeam(data, featuredMatch.awayTeamId);
 
   return (
     <>
       <PageHeader title={`${hallName} match board`} description="QR-code-ready court and hall page for spectators and staff." />
+      <Card className="mb-5 border-blue-100 bg-blue-50/40">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <p className="text-sm font-black uppercase tracking-wide text-blue-700">
+              {featuredMatch.status === "Live" ? "Current match" : "Next match"}
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-slate-900">
+              {featuredHome?.name} vs {featuredAway?.name}
+            </h2>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              {featuredMatch.date} {featuredMatch.time} - {featuredMatch.court} - {featuredMatch.periodLabel}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusPill status={featuredMatch.status} />
+            <Link href={`/matches/${featuredMatch.id}`} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+              Open match page
+            </Link>
+          </div>
+        </div>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         {hallMatches.map((match) => {
           const home = getTeam(data, match.homeTeamId);
