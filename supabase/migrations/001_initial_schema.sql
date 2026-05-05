@@ -1,5 +1,5 @@
 create type public.app_role as enum ('admin', 'scorer', 'viewer');
-create type public.sport_type as enum ('Volleyball', 'Basketball');
+create type public.sport_type as enum ('Volleyball', 'Basketball', 'Football');
 create type public.match_status as enum ('Scheduled', 'Live', 'Final');
 
 create table public.profiles (
@@ -28,12 +28,16 @@ create table public.players (
   name text not null,
   number integer not null default 0,
   position text,
+  photo_url text,
   points integer not null default 0,
+  goals integer not null default 0,
   assists integer not null default 0,
   rebounds integer not null default 0,
   blocks integer not null default 0,
   aces integer not null default 0,
   digs integer not null default 0,
+  yellow_cards integer not null default 0,
+  red_cards integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -191,7 +195,7 @@ create policy "admins and scorers update matches" on public.matches for update u
 create policy "admins delete matches" on public.matches for delete using (public.is_admin());
 
 create policy "public read match stats" on public.match_stats for select using (true);
-create policy "admins write match stats" on public.match_stats for insert with check (public.is_admin());
+create policy "scorers write match stats" on public.match_stats for insert with check (public.can_score());
 create policy "admins update match stats" on public.match_stats for update using (public.is_admin()) with check (public.is_admin());
 create policy "admins delete match stats" on public.match_stats for delete using (public.is_admin());
 
@@ -205,3 +209,19 @@ alter publication supabase_realtime add table public.teams;
 alter publication supabase_realtime add table public.players;
 alter publication supabase_realtime add table public.matches;
 alter publication supabase_realtime add table public.match_stats;
+
+insert into storage.buckets (id, name, public)
+values ('player-photos', 'player-photos', true)
+on conflict (id) do update set public = excluded.public;
+
+create policy "public read player photos" on storage.objects
+for select using (bucket_id = 'player-photos');
+
+create policy "admins upload player photos" on storage.objects
+for insert with check (bucket_id = 'player-photos' and public.is_admin());
+
+create policy "admins update player photos" on storage.objects
+for update using (bucket_id = 'player-photos' and public.is_admin()) with check (bucket_id = 'player-photos' and public.is_admin());
+
+create policy "admins delete player photos" on storage.objects
+for delete using (bucket_id = 'player-photos' and public.is_admin());

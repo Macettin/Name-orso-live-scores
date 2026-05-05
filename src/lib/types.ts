@@ -1,9 +1,43 @@
-export type Sport = "Volleyball" | "Basketball";
+export const sportOptions = ["Volleyball", "Basketball", "Football"] as const;
+export type Sport = (typeof sportOptions)[number];
 export type MatchStatus = "Scheduled" | "Live" | "Final";
 export type UserRole = "admin" | "scorer" | "viewer";
+export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
+export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
+export type TournamentSportType = (typeof tournamentSportOptions)[number];
+export type MatchEventType = "goal" | "yellow" | "red" | "substitution";
+export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
+export type PlayerStatKey = (typeof playerStatKeys)[number];
+export const playerStatsBySport = {
+  Football: ["goals", "assists", "yellow_cards", "red_cards"],
+  Basketball: ["points", "assists", "rebounds", "blocks"],
+  Volleyball: ["points", "aces", "digs", "blocks"]
+} as const satisfies Record<Sport, readonly PlayerStatKey[]>;
+export const playerStatLabels: Record<PlayerStatKey, string> = {
+  points: "Points / Goals",
+  goals: "Points / Goals",
+  assists: "Assists",
+  rebounds: "Rebounds",
+  blocks: "Blocks",
+  aces: "Aces",
+  digs: "Digs",
+  yellow_cards: "Yellow cards",
+  red_cards: "Red cards"
+};
+
+export type Tournament = {
+  id: string;
+  name: string;
+  sportType: TournamentSportType;
+  location: string;
+  startDate: string;
+  endDate: string;
+  status: TournamentStatus;
+};
 
 export type Team = {
   id: string;
+  tournamentId?: string;
   name: string;
   sport: Sport;
   group: string;
@@ -14,22 +48,19 @@ export type Team = {
 
 export type Player = {
   id: string;
+  tournamentId?: string;
   teamId: string;
   name: string;
   number: number;
   position: string;
-  stats: {
-    points: number;
-    assists?: number;
-    rebounds?: number;
-    blocks?: number;
-    aces?: number;
-    digs?: number;
-  };
+  photoUrl?: string;
+  stats: Record<PlayerStatKey, number>;
+  baseStats?: Record<PlayerStatKey, number>;
 };
 
 export type Match = {
   id: string;
+  tournamentId?: string;
   sport: Sport;
   group: string;
   court: string;
@@ -42,7 +73,20 @@ export type Match = {
   homeScore: number;
   awayScore: number;
   periodLabel: string;
+  matchMinute?: string;
   report?: string;
+};
+
+export type MatchEvent = {
+  id: string;
+  tournamentId?: string;
+  matchId: string;
+  teamId?: string;
+  playerId?: string;
+  type: MatchEventType;
+  minute: string;
+  description?: string;
+  createdAt?: string;
 };
 
 export type Standing = {

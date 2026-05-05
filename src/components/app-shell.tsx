@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { Activity, BarChart3, CalendarDays, ClipboardPenLine, Shield, Users } from "lucide-react";
+import { useTournamentData } from "@/hooks/use-tournament-data";
 
 const navItems = [
   { href: "/fixtures", label: "Fixtures", icon: CalendarDays },
@@ -12,6 +15,8 @@ const navItems = [
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { data, selectedTournamentId, setSelectedTournamentId } = useTournamentData();
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur">
@@ -26,6 +31,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
+            <label className="min-w-0 sm:w-52">
+              <span className="sr-only">Tournament</span>
+              <select
+                value={selectedTournamentId}
+                onChange={(event) => setSelectedTournamentId(event.target.value)}
+                className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 shadow-sm outline-none transition hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                {data.tournaments.length === 0 ? <option value="main-tournament">Main Tournament</option> : null}
+                {data.tournaments.map((tournament) => (
+                  <option key={tournament.id} value={tournament.id}>
+                    {tournament.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <nav className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end lg:flex-nowrap">
               {navItems.map((item) => {
                 const Icon = item.icon;
