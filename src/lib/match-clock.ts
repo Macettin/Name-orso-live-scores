@@ -8,7 +8,7 @@ export function getBasketballDefaultSeconds() {
 
 export function isFootballClockOverride(label?: string) {
   const normalized = label?.trim().toLowerCase();
-  return Boolean(normalized && /^(ht|ft|et|aet|pens?|penalties|extra time|full time|half time)$/.test(normalized));
+  return Boolean(normalized && (/^(ht|ft|et|aet|pens?|penalties|extra time|full time|half time)$/.test(normalized) || /^\d{1,3}\+\d{1,2}'?$/.test(normalized)));
 }
 
 export function getMatchClockSeconds(match: Match, now = Date.now()) {
@@ -41,17 +41,18 @@ function formatFootballClock(match: Match, seconds: number) {
     return manualOverride;
   }
 
-  if (phase.includes("half time")) return "HT";
-  if (phase.includes("full") || phase.includes("final")) return "FT";
+  if (phase.includes("half time")) return "Halftime";
+  if (phase.includes("full") || phase.includes("final") || match.status === "Final") return "90:00";
 
-  const minute = Math.max(1, Math.floor(seconds / 60) + 1);
-  const regularLimit = phase.includes("second") ? 90 : 45;
+  return formatSeconds(Math.min(seconds, 90 * 60));
+}
 
-  if (minute <= regularLimit) {
-    return `${minute}'`;
-  }
+function footballStartSeconds(match: Match) {
+  const phase = match.periodLabel.toLowerCase();
 
-  return `${regularLimit}+${minute - regularLimit}'`;
+  if (phase.includes("second")) return 45 * 60;
+  if (phase.includes("full") || phase.includes("final")) return 90 * 60;
+  return 0;
 }
 
 export function formatMatchClock(match: Match, now = Date.now()) {
@@ -82,7 +83,7 @@ export function getClockStateForAction(match: Match, action: "start" | "pause" |
   }
 
   if (action === "reset") {
-    const resetSeconds = match.sport === "Basketball" ? countdownSeconds : 0;
+    const resetSeconds = match.sport === "Basketball" ? countdownSeconds : match.sport === "Football" ? footballStartSeconds(match) : 0;
     return {
       clockRunning: false,
       clockStartedAt: undefined,
@@ -94,7 +95,7 @@ export function getClockStateForAction(match: Match, action: "start" | "pause" |
   return {
     clockRunning: true,
     clockStartedAt: new Date(now).toISOString(),
-    clockBaseSeconds: action === "start" ? (match.sport === "Basketball" ? countdownSeconds : 0) : currentSeconds,
+    clockBaseSeconds: action === "start" ? (match.sport === "Basketball" ? countdownSeconds : match.sport === "Football" ? footballStartSeconds(match) : 0) : currentSeconds,
     clockCountdownSeconds: countdownSeconds
   };
 }

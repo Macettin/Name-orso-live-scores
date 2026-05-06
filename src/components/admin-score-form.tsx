@@ -441,6 +441,35 @@ export function AdminScoreForm() {
     setMessage(`${action.charAt(0).toUpperCase()}${action.slice(1)} clock: ${formatMatchClock({ ...selectedScoreMatch, ...clockState })}`);
   }
 
+  function startFootballSecondHalf() {
+    if (!selectedScoreMatch) {
+      return;
+    }
+
+    const secondHalfMatch = {
+      ...selectedScoreMatch,
+      periodLabel: "Second Half",
+      clockBaseSeconds: 45 * 60,
+      clockStartedAt: undefined,
+      clockRunning: false
+    };
+    const clockState = getClockStateForAction(secondHalfMatch, "start");
+
+    saveScore(selectedScoreMatch.id, {
+      homeScore: selectedScoreMatch.homeScore,
+      awayScore: selectedScoreMatch.awayScore,
+      periodLabel: "Second Half",
+      matchMinute: selectedScoreMatch.matchMinute,
+      clockLabel: "",
+      clockRunning: clockState.clockRunning,
+      clockStartedAt: clockState.clockStartedAt,
+      clockBaseSeconds: clockState.clockBaseSeconds,
+      clockCountdownSeconds: selectedScoreMatch.clockCountdownSeconds,
+      status: "Live"
+    });
+    setMessage("Started second half clock at 45:00.");
+  }
+
   function submitEvent(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const matchId = eventForm.matchId || eventMatches[0]?.id;
@@ -597,6 +626,29 @@ export function AdminScoreForm() {
 
       {canManageAll ? (
         <>
+      <section className="rounded-lg border border-blue-200 bg-blue-50 p-5 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/70 p-4">
+            <div>
+              <h2 className="text-lg font-black text-blue-950">Fixture builder</h2>
+              <p className="mt-1 text-sm font-semibold text-blue-700">Generate league, group stage, and knockout placeholder fixtures with preview before saving.</p>
+            </div>
+            <Link href="/admin/fixture-builder" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+              Open fixture builder
+            </Link>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/70 p-4">
+            <div>
+              <h2 className="text-lg font-black text-blue-950">Player import</h2>
+              <p className="mt-1 text-sm font-semibold text-blue-700">Upload CSV or Excel rosters, preview duplicates, and import players in bulk.</p>
+            </div>
+            <Link href="/admin/player-import" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+              Import players
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Tournaments", "Create, edit, and delete tournaments. Team, player, match, and score edits use the selected tournament.")}
@@ -1222,6 +1274,11 @@ export function AdminScoreForm() {
             <button type="button" onClick={() => applyClockAction("start")} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
               Start clock
             </button>
+            {selectedScoreSport === "Football" ? (
+              <button type="button" onClick={startFootballSecondHalf} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+                Start second half
+              </button>
+            ) : null}
             <button type="button" onClick={() => applyClockAction("pause")} className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50">
               Pause clock
             </button>

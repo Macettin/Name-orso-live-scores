@@ -69,6 +69,8 @@ export type Player = {
   name: string;
   number: number;
   position: string;
+  country?: string;
+  birthdate?: string;
   photoUrl?: string;
   stats: Record<PlayerStatKey, number>;
   baseStats?: Record<PlayerStatKey, number>;

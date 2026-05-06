@@ -86,6 +86,8 @@ type PlayerRow = {
   name: string;
   number: number;
   position: string | null;
+  country: string | null;
+  birthdate: string | null;
   photo_url: string | null;
   points: number | null;
   assists: number | null;
@@ -232,6 +234,8 @@ function mapPlayer(row: PlayerRow, matchStatsByPlayer: Map<string, Partial<Playe
     name: row.name,
     number: row.number,
     position: row.position ?? "",
+    country: row.country ?? undefined,
+    birthdate: row.birthdate ?? undefined,
     photoUrl: row.photo_url ?? undefined,
     baseStats,
     stats: {
@@ -335,7 +339,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   const [
     { data: tournamentRows, error: tournamentError },
     { data: teamRows, error: teamError },
-    { data: playerRows, error: playerError },
+    playerResult,
     { data: matchStatRows, error: matchStatError },
     { data: matchTeamStatsRows, error: matchTeamStatsError }
   ] = await Promise.all([
@@ -343,7 +347,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase.from("teams").select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
     supabase
       .from("players")
-      .select("id,tournament_id,team_id,name,number,position,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
+      .select("id,tournament_id,team_id,name,number,position,country,birthdate,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
       .eq("tournament_id", tournamentId)
       .order("name"),
     supabase.from("match_stats").select("tournament_id,match_id,team_id,player_id,stat_key,stat_value").eq("tournament_id", tournamentId),
@@ -355,9 +359,21 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
 
   if (tournamentError) throw tournamentError;
   if (teamError) throw teamError;
-  if (playerError) throw playerError;
   if (matchStatError) throw matchStatError;
   if (matchTeamStatsError && !isMissingRelationError(matchTeamStatsError)) throw matchTeamStatsError;
+
+  let playerRows = playerResult.data as PlayerRow[] | null;
+  if (playerResult.error && (playerResult.error.code === "PGRST204" || playerResult.error.code === "42703")) {
+    const { data: fallbackPlayerRows, error: fallbackPlayerError } = await supabase
+      .from("players")
+      .select("id,tournament_id,team_id,name,number,position,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
+      .eq("tournament_id", tournamentId)
+      .order("name");
+    if (fallbackPlayerError) throw fallbackPlayerError;
+    playerRows = fallbackPlayerRows as PlayerRow[] | null;
+  } else if (playerResult.error) {
+    throw playerResult.error;
+  }
 
   const teams = ((teamRows ?? []) as TeamRow[]).map(mapTeam);
   const matchStatsByPlayer = new Map<string, Partial<Player["stats"]>>();
@@ -529,13 +545,15 @@ export async function saveSupabasePlayer(player: Player, tournamentId = "main-to
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const { error } = await supabase.from("players").upsert({
+  const payload = {
     id: player.id,
     tournament_id: player.tournamentId ?? tournamentId,
     team_id: player.teamId,
     name: player.name,
     number: player.number,
     position: player.position,
+    country: player.country ?? null,
+    birthdate: player.birthdate || null,
     photo_url: player.photoUrl ?? null,
     points: player.stats.points,
     goals: player.stats.goals,
@@ -546,7 +564,32 @@ export async function saveSupabasePlayer(player: Player, tournamentId = "main-to
     digs: player.stats.digs ?? 0,
     yellow_cards: player.stats.yellow_cards,
     red_cards: player.stats.red_cards
-  });
+  };
+
+  const { error } = await supabase.from("players").upsert(payload);
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const fallbackPayload = {
+      id: payload.id,
+      tournament_id: payload.tournament_id,
+      team_id: payload.team_id,
+      name: payload.name,
+      number: payload.number,
+      position: payload.position,
+      photo_url: payload.photo_url,
+      points: payload.points,
+      goals: payload.goals,
+      assists: payload.assists,
+      rebounds: payload.rebounds,
+      blocks: payload.blocks,
+      aces: payload.aces,
+      digs: payload.digs,
+      yellow_cards: payload.yellow_cards,
+      red_cards: payload.red_cards
+    };
+    const { error: fallbackError } = await supabase.from("players").upsert(fallbackPayload);
+    if (fallbackError) throw fallbackError;
+    return;
+  }
   if (error) throw error;
 }
 

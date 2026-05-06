@@ -49,6 +49,37 @@ function minuteSortValue(event: MatchEvent) {
   return Number.isFinite(baseMinute) ? baseMinute + stoppageMinute / 100 : 999;
 }
 
+function normalizeVenuePart(value?: string) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function venueLabel(court: string, hallSlug: string) {
+  const courtValue = court.trim();
+  const hallValue = hallSlug.trim();
+
+  if (!courtValue) {
+    return hallValue;
+  }
+
+  if (!hallValue || normalizeVenuePart(courtValue) === normalizeVenuePart(hallValue) || hallValue.includes("-")) {
+    return courtValue;
+  }
+
+  return `${courtValue} / ${hallValue}`;
+}
+
+function statusDisplay(match: Match, clockLabel: string) {
+  if (match.status === "Final") {
+    return "FULL TIME";
+  }
+
+  if (match.status === "Live") {
+    return `LIVE${clockLabel ? ` ${clockLabel}` : ""}`;
+  }
+
+  return match.status.toUpperCase();
+}
+
 function playerInitials(name: string) {
   const initials = name
     .trim()
@@ -445,6 +476,8 @@ export default function MatchPage() {
   const matchPlayers = [...homePlayers, ...awayPlayers];
   const accent = tournament?.primaryColor || "#2563eb";
   const clockLabel = formatMatchClock(match);
+  const matchStatusLabel = statusDisplay(match, clockLabel);
+  const matchVenueLabel = venueLabel(match.court, match.hallSlug);
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-5 pb-8 sm:gap-6">
@@ -489,11 +522,9 @@ export default function MatchPage() {
                 <p className="text-sm font-bold uppercase tracking-wide text-white/60">{match.sport} / {match.group}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm font-black sm:flex sm:flex-wrap sm:items-center">
-              <span className="rounded-full bg-white px-3 py-2 text-center uppercase text-blue-700 shadow-sm">{match.status}</span>
-              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-center text-white">{clockLabel}</span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/80 sm:col-auto">{match.court}</span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/80 sm:col-auto">{match.hallSlug}</span>
+            <div className="grid grid-cols-1 gap-2 text-sm font-black sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+              <span className="rounded-full bg-white px-3 py-2 text-center uppercase text-blue-700 shadow-sm">{matchStatusLabel}</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/80 sm:col-auto">{matchVenueLabel}</span>
             </div>
           </div>
 
@@ -512,18 +543,14 @@ export default function MatchPage() {
             <ScoreTeamCard label="Away" team={away} events={awayGoalEvents} players={awayPlayers} align="right" />
           </div>
 
-          <div className="mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-2">
             <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
               <p className="text-xs uppercase tracking-wide text-white/45">Match time</p>
               <p className="mt-1 text-base font-black text-white sm:text-lg">{match.date} {match.time}</p>
             </div>
             <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
-              <p className="text-xs uppercase tracking-wide text-white/45">Period</p>
-              <p className="mt-1 text-base font-black text-white sm:text-lg">{match.periodLabel}</p>
-            </div>
-            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
-              <p className="text-xs uppercase tracking-wide text-white/45">Court / Hall</p>
-              <p className="mt-1 break-words text-base font-black text-white sm:text-lg">{match.court} / {match.hallSlug}</p>
+              <p className="text-xs uppercase tracking-wide text-white/45">Venue</p>
+              <p className="mt-1 break-words text-base font-black text-white sm:text-lg">{matchVenueLabel}</p>
             </div>
           </div>
         </div>
@@ -602,13 +629,10 @@ export default function MatchPage() {
         <Panel title="Match info" eyebrow="Details">
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             {[
-              ["Status", match.status],
               ["Sport", match.sport],
               ["Group", match.group],
-              ["Clock", clockLabel],
-              ["Period", match.periodLabel],
-              ["Court", match.court],
-              ["Hall", match.hallSlug],
+              ["Status", matchStatusLabel],
+              ["Venue", matchVenueLabel],
               ["Date", match.date],
               ["Time", match.time]
             ].map(([label, value]) => (

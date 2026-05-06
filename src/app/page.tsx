@@ -14,6 +14,12 @@ export default function Home() {
   const standings = buildStandings(data);
   const tournament = data.tournaments.find((item) => item.id === selectedTournamentId);
   const scoreboardMatch = liveMatches[0] ?? nextFixtures[0] ?? data.matches[0];
+  const heroChips = [
+    { label: "Live scores", href: "/live" },
+    { label: "Team stats", href: "/standings" },
+    { label: "Match timeline", href: scoreboardMatch ? `/matches/${scoreboardMatch.id}` : "/fixtures" },
+    { label: "QR court pages", href: "/qr-print" }
+  ];
 
   return (
     <>
@@ -30,10 +36,14 @@ export default function Home() {
                 A premium live tournament hub for fixtures, scoreboards, standings, team profiles, player stats, match reports, and court QR pages.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {["Live scores", "Team stats", "Match timeline", "QR court pages"].map((chip) => (
-                  <span key={chip} className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-black text-blue-50 backdrop-blur">
-                    {chip}
-                  </span>
+                {heroChips.map((chip) => (
+                  <Link
+                    key={chip.label}
+                    href={chip.href}
+                    className="cursor-pointer rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-black text-blue-50 backdrop-blur transition duration-200 hover:scale-[1.03] hover:bg-white/18 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80"
+                  >
+                    {chip.label}
+                  </Link>
                 ))}
               </div>
             </div>
