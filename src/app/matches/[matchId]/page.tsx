@@ -327,9 +327,14 @@ export default function MatchPage() {
             {home?.name ?? "Home"} vs {away?.name ?? "Away"}
           </h1>
         </div>
-        <Link href={`/scoreboard/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 sm:w-auto">
-          Open scoreboard
-        </Link>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Link href={`/reports/match/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto">
+            Match report
+          </Link>
+          <Link href={`/scoreboard/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 sm:w-auto">
+            Open scoreboard
+          </Link>
+        </div>
       </header>
 
       <section className="overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_22px_58px_rgba(37,99,235,0.14)]">

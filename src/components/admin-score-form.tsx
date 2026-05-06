@@ -839,9 +839,14 @@ export function AdminScoreForm() {
                 const home = data.teams.find((team) => team.id === match.homeTeamId);
                 const away = data.teams.find((team) => team.id === match.awayTeamId);
                 return (
-                  <Link key={match.id} href={`/matches/${match.id}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
-                    {home?.name} vs {away?.name} - {match.court}
-                  </Link>
+                  <div key={match.id} className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <Link href={`/matches/${match.id}`} className="break-words text-blue-700 hover:text-blue-800">
+                      {home?.name} vs {away?.name} - {match.court}
+                    </Link>
+                    <Link href={`/reports/match/${match.id}`} className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-center text-xs font-black text-blue-700 hover:bg-blue-50">
+                      Report
+                    </Link>
+                  </div>
                 );
               })}
               {data.matches.length === 0 ? <p className="text-sm text-slate-400">No matches available.</p> : null}
@@ -989,7 +994,10 @@ export function AdminScoreForm() {
                 <p className="text-sm text-slate-400">
                   {match.date} {match.time} - {match.court} - {match.status} - {match.homeScore}-{match.awayScore}
                 </p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/reports/match/${match.id}`} className="flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                    Report
+                  </Link>
                   <button onClick={() => editMatch(match)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
                     <Pencil size={14} aria-hidden="true" />
                     Edit

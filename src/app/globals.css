@@ -44,3 +44,62 @@ a {
 .orso-highlight {
   animation: orso-pulse-highlight 0.9s ease-out;
 }
+
+.report-table th,
+.report-table td {
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.report-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+  }
+
+  body > div > header,
+  nav,
+  .print-hidden {
+    display: none !important;
+  }
+
+  .report-page {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .report-section,
+  .report-page section,
+  .report-page header {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .report-table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  .report-table th,
+  .report-table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+  }
+}
