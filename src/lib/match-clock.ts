@@ -1,0 +1,100 @@
+import type { Match } from "./types";
+
+const basketballDefaultSeconds = 10 * 60;
+
+export function getBasketballDefaultSeconds() {
+  return basketballDefaultSeconds;
+}
+
+export function isFootballClockOverride(label?: string) {
+  const normalized = label?.trim().toLowerCase();
+  return Boolean(normalized && /^(ht|ft|et|aet|pens?|penalties|extra time|full time|half time)$/.test(normalized));
+}
+
+export function getMatchClockSeconds(match: Match, now = Date.now()) {
+  const baseSeconds = match.clockBaseSeconds ?? (match.sport === "Basketball" ? match.clockCountdownSeconds ?? basketballDefaultSeconds : 0);
+
+  if (!match.clockRunning || !match.clockStartedAt) {
+    return baseSeconds;
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - new Date(match.clockStartedAt).getTime()) / 1000));
+
+  if (match.sport === "Basketball") {
+    return Math.max(0, baseSeconds - elapsedSeconds);
+  }
+
+  return baseSeconds + elapsedSeconds;
+}
+
+function formatSeconds(value: number) {
+  const minutes = Math.floor(value / 60);
+  const seconds = value % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatFootballClock(match: Match, seconds: number) {
+  const phase = match.periodLabel.toLowerCase();
+  const manualOverride = match.clockLabel?.trim();
+
+  if (isFootballClockOverride(manualOverride)) {
+    return manualOverride;
+  }
+
+  if (phase.includes("half time")) return "HT";
+  if (phase.includes("full") || phase.includes("final")) return "FT";
+
+  const minute = Math.max(1, Math.floor(seconds / 60) + 1);
+  const regularLimit = phase.includes("second") ? 90 : 45;
+
+  if (minute <= regularLimit) {
+    return `${minute}'`;
+  }
+
+  return `${regularLimit}+${minute - regularLimit}'`;
+}
+
+export function formatMatchClock(match: Match, now = Date.now()) {
+  if (match.sport === "Volleyball") {
+    return match.clockLabel || match.periodLabel || "Set 1";
+  }
+
+  const seconds = getMatchClockSeconds(match, now);
+
+  if (match.sport === "Basketball") {
+    return `${match.periodLabel || "Q1"} ${formatSeconds(seconds)}`;
+  }
+
+  return formatFootballClock(match, seconds) || match.clockLabel || match.matchMinute || match.periodLabel || "Pregame";
+}
+
+export function getClockStateForAction(match: Match, action: "start" | "pause" | "resume" | "reset", now = Date.now()): Partial<Match> {
+  const currentSeconds = getMatchClockSeconds(match, now);
+  const countdownSeconds = match.clockCountdownSeconds ?? basketballDefaultSeconds;
+
+  if (action === "pause") {
+    return {
+      clockRunning: false,
+      clockStartedAt: undefined,
+      clockBaseSeconds: currentSeconds,
+      clockLabel: formatMatchClock({ ...match, clockRunning: false, clockBaseSeconds: currentSeconds, clockStartedAt: undefined }, now)
+    };
+  }
+
+  if (action === "reset") {
+    const resetSeconds = match.sport === "Basketball" ? countdownSeconds : 0;
+    return {
+      clockRunning: false,
+      clockStartedAt: undefined,
+      clockBaseSeconds: resetSeconds,
+      clockLabel: formatMatchClock({ ...match, clockRunning: false, clockBaseSeconds: resetSeconds, clockStartedAt: undefined }, now)
+    };
+  }
+
+  return {
+    clockRunning: true,
+    clockStartedAt: new Date(now).toISOString(),
+    clockBaseSeconds: action === "start" ? (match.sport === "Basketball" ? countdownSeconds : 0) : currentSeconds,
+    clockCountdownSeconds: countdownSeconds
+  };
+}

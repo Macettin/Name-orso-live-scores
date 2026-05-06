@@ -4,10 +4,22 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { Card, PageHeader, TeamLogo } from "@/components/ui";
+import { PageHeader, TeamLogo } from "@/components/ui";
+import { YouTubeEmbed } from "@/components/youtube-embed";
 import { getTeam } from "@/lib/data-store";
+import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
+import { formatMatchClock } from "@/lib/match-clock";
 import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Player, type PlayerStatKey, type Team } from "@/lib/types";
+
+type MatchTab = "timeline" | "lineups" | "stats" | "stream";
+
+const matchTabs: { id: MatchTab; label: string }[] = [
+  { id: "timeline", label: "Timeline" },
+  { id: "lineups", label: "Lineups" },
+  { id: "stats", label: "Stats" },
+  { id: "stream", label: "Stream" }
+];
 
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
@@ -49,24 +61,25 @@ function playerInitials(name: string) {
 
 function PlayerAvatar({ player, size = "h-10 w-10" }: { player?: Player | null; size?: string }) {
   if (player?.photoUrl) {
-    return <span aria-hidden="true" className={clsx("shrink-0 rounded-full bg-cover bg-center", size)} style={{ backgroundImage: `url(${player.photoUrl})` }} />;
+    return <span aria-hidden="true" className={clsx("shrink-0 rounded-full bg-cover bg-center ring-1 ring-blue-100", size)} style={{ backgroundImage: `url(${player.photoUrl})` }} />;
   }
 
   return (
-    <span className={clsx("flex shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-blue-700", size)}>
+    <span className={clsx("flex shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100", size)}>
       {player ? playerInitials(player.name) : "?"}
     </span>
   );
 }
 
-function Section({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+function Panel({ title, eyebrow, children, className }: { title: string; eyebrow?: string; children: React.ReactNode; className?: string }) {
   return (
-    <Card className={clsx("p-4 sm:p-5", className)}>
-      <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-        <h2 className="text-lg font-black text-slate-900">{title}</h2>
+    <section className={clsx("overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_16px_42px_rgba(37,99,235,0.09)]", className)}>
+      <div className="border-b border-blue-50 px-4 py-4 sm:px-5">
+        {eyebrow ? <p className="text-xs font-black uppercase tracking-wide text-blue-600">{eyebrow}</p> : null}
+        <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">{title}</h2>
       </div>
-      {children}
-    </Card>
+      <div className="p-4 sm:p-5">{children}</div>
+    </section>
   );
 }
 
@@ -76,44 +89,87 @@ function TeamRoster({ team, players }: { team?: Team; players: Player[] }) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.05)]">
-      <div className="flex min-w-0 items-center gap-3">
-        <TeamLogo team={team} size="h-11 w-11" />
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex min-w-0 items-center gap-3 bg-blue-50 px-4 py-3">
+        <TeamLogo team={team} size="h-12 w-12" />
         <div className="min-w-0">
-          <h3 className="break-words text-base font-black text-slate-900">{team.name}</h3>
-          <p className="text-sm font-semibold text-slate-400">{players.length} players</p>
+          <h3 className="break-words text-base font-black text-slate-950">{team.name}</h3>
+          <p className="text-sm font-semibold text-blue-700">{players.length} players</p>
         </div>
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+      <div className="grid divide-y divide-slate-100">
         {players.length > 0 ? (
           players.map((player) => (
-            <div key={player.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-3">
-              <PlayerAvatar player={player} />
+            <div key={player.id} className="flex min-w-0 items-center gap-3 px-4 py-3">
+              <PlayerAvatar player={player} size="h-10 w-10" />
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-900">
-                  #{player.number} {player.name}
+                <p className="break-words text-sm font-black text-slate-950">
+                  <span className="mr-2 text-blue-600">#{player.number}</span>
+                  {player.name}
                 </p>
-                <p className="truncate text-sm text-slate-500">{player.position || "Player"}</p>
+                <p className="text-sm font-medium text-slate-500">{player.position || "Player"}</p>
               </div>
             </div>
           ))
         ) : (
-          <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-400">Roster not available.</p>
+          <p className="px-4 py-4 text-sm font-semibold text-slate-400">Roster not available.</p>
         )}
       </div>
     </div>
   );
 }
 
-function EventIcon({ type }: { type: MatchEventType }) {
-  if (type === "yellow" || type === "red") {
-    return <span className={clsx("mt-1 h-5 w-3 rounded-sm shadow-sm", type === "yellow" ? "bg-yellow-300" : "bg-red-600")} aria-hidden="true" />;
+function GoalScorerList({ events, players, align = "left" }: { events: MatchEvent[]; players: Player[]; align?: "left" | "right" }) {
+  if (events.length === 0) {
+    return null;
   }
 
   return (
-    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100" aria-hidden="true">
+    <div className={clsx("mt-3 grid gap-2", align === "right" ? "justify-items-end" : "justify-items-start")}>
+      {groupGoalEventsByScorer(events, players).map((scorer) => {
+        return (
+          <div key={scorer.key} className="flex max-w-full items-center gap-2 rounded-full bg-blue-950/35 px-3 py-2 text-xs font-black text-white ring-1 ring-white/10">
+            <span aria-hidden="true">{"\u26bd"}</span>
+            {scorer.player ? <PlayerAvatar player={scorer.player} size="h-7 w-7" /> : null}
+            <span className="min-w-0 break-words">{scorer.label}</span>
+            <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5">{scorer.minutes.join(", ")}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EventIcon({ type }: { type: MatchEventType }) {
+  if (type === "yellow" || type === "red") {
+    return <span className={clsx("mt-1 h-6 w-4 rounded-sm shadow-sm", type === "yellow" ? "bg-yellow-300" : "bg-red-600")} aria-hidden="true" />;
+  }
+
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100" aria-hidden="true">
       {eventIcons[type]}
     </span>
+  );
+}
+
+function TimelineEventCard({ event, team, player }: { event: MatchEvent; team?: Team | null; player?: Player | null }) {
+  return (
+    <article className="grid grid-cols-[auto_1fr] gap-3 rounded-lg border border-blue-100 bg-white px-3 py-3 shadow-[0_10px_28px_rgba(37,99,235,0.08)] sm:grid-cols-[auto_auto_1fr] sm:px-4">
+      <span className="rounded-lg bg-blue-600 px-2.5 py-1 text-sm font-black text-white shadow-sm">{event.minute}</span>
+      <EventIcon type={event.type} />
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <p className="text-sm font-black text-slate-950">{eventLabels[event.type]}</p>
+          {team ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{team.name}</span> : null}
+        </div>
+        <div className="mt-2 flex min-w-0 items-center gap-2">
+          {player ? <PlayerAvatar player={player} size="h-8 w-8" /> : null}
+          <p className="min-w-0 break-words text-sm font-medium leading-6 text-slate-600">
+            {[player?.name, event.description].filter(Boolean).join(" - ") || "Match event"}
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -129,14 +185,14 @@ function TeamPlayerStats({ team, players }: { team?: Team; players: Player[] }) 
   const statKeys = statKeysForTeam(team);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center gap-3 bg-blue-50 px-4 py-3">
-        <TeamLogo team={team} size="h-9 w-9" />
-        <h3 className="break-words font-black text-blue-900">{team.name}</h3>
+        <TeamLogo team={team} size="h-10 w-10" />
+        <h3 className="break-words font-black text-blue-950">{team.name}</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100 text-sm">
-          <thead className="bg-white text-left text-xs font-bold uppercase tracking-wide text-slate-400">
+          <thead className="bg-white text-left text-xs font-black uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Player</th>
               {statKeys.map((stat) => (
@@ -150,9 +206,9 @@ function TeamPlayerStats({ team, players }: { team?: Team; players: Player[] }) 
             {players.map((player) => (
               <tr key={player.id}>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-52 items-center gap-3">
                     <PlayerAvatar player={player} size="h-8 w-8" />
-                    <span className="whitespace-nowrap font-bold text-slate-900">#{player.number} {player.name}</span>
+                    <span className="font-bold text-slate-950">#{player.number} {player.name}</span>
                   </div>
                 </td>
                 {statKeys.map((stat) => (
@@ -176,6 +232,39 @@ function TeamPlayerStats({ team, players }: { team?: Team; players: Player[] }) 
   );
 }
 
+function ScoreTeamCard({
+  label,
+  team,
+  events,
+  players,
+  align = "left"
+}: {
+  label: string;
+  team?: Team;
+  events: MatchEvent[];
+  players: Player[];
+  align?: "left" | "right";
+}) {
+  return (
+    <Link
+      href={team ? `/teams/${team.id}` : "/teams"}
+      className={clsx(
+        "min-w-0 rounded-lg border border-white/15 bg-white/10 p-4 shadow-sm ring-1 ring-white/10 transition hover:bg-white/15",
+        align === "right" ? "text-left md:text-right" : "text-left"
+      )}
+    >
+      <div className={clsx("flex min-w-0 items-center gap-3", align === "right" ? "md:justify-end" : "")}>
+        <TeamLogo team={team} size="h-14 w-14 sm:h-16 sm:w-16" />
+        <div className={clsx("min-w-0", align === "right" ? "md:order-first" : "")}>
+          <p className="text-xs font-black uppercase tracking-wide text-white/55">{label}</p>
+          <p className="mt-1 break-words text-2xl font-black leading-tight text-white sm:text-3xl">{team?.name ?? label}</p>
+        </div>
+      </div>
+      <GoalScorerList events={events} players={players} align={align} />
+    </Link>
+  );
+}
+
 export default function MatchPage() {
   const params = useParams<{ matchId: string }>();
   const { data } = useTournamentData();
@@ -189,6 +278,7 @@ export default function MatchPage() {
   const previousEventSignature = useRef(eventSignature);
   const [scoreHighlight, setScoreHighlight] = useState(false);
   const [eventHighlight, setEventHighlight] = useState(false);
+  const [activeTab, setActiveTab] = useState<MatchTab>("timeline");
 
   useEffect(() => {
     if (scoreSignature && previousScoreSignature.current !== scoreSignature) {
@@ -220,172 +310,185 @@ export default function MatchPage() {
   const away = getTeam(data, match.awayTeamId);
   const tournament = data.tournaments.find((item) => item.id === match.tournamentId);
   const events = data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(first) - minuteSortValue(second));
+  const goalEvents = events.filter((event) => event.type === "goal");
+  const homeGoalEvents = goalEvents.filter((event) => event.teamId === match.homeTeamId);
+  const awayGoalEvents = goalEvents.filter((event) => event.teamId === match.awayTeamId);
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
   const accent = tournament?.primaryColor || "#2563eb";
-  const clockLabel = match.clockLabel || match.matchMinute || match.periodLabel;
+  const clockLabel = formatMatchClock(match);
 
   return (
-    <>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-black uppercase tracking-wide text-blue-700">Public match center</p>
-          <h1 className="mt-1 break-words text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+    <div className="mx-auto grid w-full max-w-7xl gap-5 pb-8 sm:gap-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Public match center</p>
+          <h1 className="mt-1 break-words text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
             {home?.name ?? "Home"} vs {away?.name ?? "Away"}
           </h1>
         </div>
-        <Link href={`/scoreboard/${match.id}`} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100">
+        <Link href={`/scoreboard/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 sm:w-auto">
           Open scoreboard
         </Link>
-      </div>
-      <div className="grid gap-6">
-        <section className="overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_18px_44px_rgba(37,99,235,0.12)]">
-          <div
-            className={clsx(
-              "relative overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-blue-900 p-5 text-white sm:p-7",
-              scoreHighlight && "orso-highlight"
-            )}
-            style={{ background: `linear-gradient(135deg, ${accent}, #1d4ed8 48%, #0f172a)` }}
-          >
-            <div className="absolute inset-x-0 top-0 h-px bg-white/35" />
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-3">
-                {tournament?.logoUrl ? (
-                  <span className="h-14 w-14 shrink-0 rounded-lg bg-white/15 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
-                ) : (
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-white/15 text-lg font-black">
-                    {(tournament?.name || "OR").slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="break-words text-xl font-black sm:text-2xl">{tournament?.name || "Tournament"}</p>
-                  <p className="text-sm font-bold uppercase tracking-wide text-white/65">Live match center</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black uppercase text-blue-700 shadow-sm">{match.status}</span>
-                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-black text-white">{clockLabel}</span>
-                {match.status === "Live" ? <span className="h-3 w-3 rounded-full bg-red-400 shadow-[0_0_18px_rgba(248,113,113,0.9)]" /> : null}
+      </header>
+
+      <section className="overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_22px_58px_rgba(37,99,235,0.14)]">
+        <div
+          className={clsx(
+            "relative overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-blue-950 p-4 text-white sm:p-6",
+            scoreHighlight && "orso-highlight"
+          )}
+          style={{ background: `linear-gradient(135deg, ${accent}, #2563eb 46%, #0f172a)` }}
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-white/35" />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              {tournament?.logoUrl ? (
+                <span className="h-12 w-12 shrink-0 rounded-lg bg-white/15 bg-contain bg-center bg-no-repeat ring-1 ring-white/15" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
+              ) : (
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/15 text-lg font-black ring-1 ring-white/15">
+                  {(tournament?.name || "OR").slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="break-words text-lg font-black sm:text-2xl">{tournament?.name || "Tournament"}</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-white/60">{match.sport} / {match.group}</p>
               </div>
             </div>
-
-            <div className="mt-8 grid items-center gap-5 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <Link href={home ? `/teams/${home.id}` : "/teams"} className="min-w-0 rounded-lg border border-white/15 bg-white/10 p-4 text-left shadow-sm transition hover:bg-white/15">
-                <div className="flex items-center gap-3">
-                  <TeamLogo team={home} size="h-14 w-14" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold uppercase tracking-wide text-white/60">Home</p>
-                    <p className="mt-1 break-words text-2xl font-black sm:text-4xl">{home?.name ?? "Home"}</p>
-                  </div>
-                </div>
-              </Link>
-              <div className="rounded-lg bg-white px-5 py-4 text-center text-6xl font-black leading-none text-blue-700 shadow-xl ring-1 ring-white/80 sm:px-8 sm:text-7xl lg:text-8xl">
-                <span>{match.homeScore}</span>
-                <span className="px-3 text-slate-300">-</span>
-                <span>{match.awayScore}</span>
-              </div>
-              <Link href={away ? `/teams/${away.id}` : "/teams"} className="min-w-0 rounded-lg border border-white/15 bg-white/10 p-4 text-left shadow-sm transition hover:bg-white/15 md:text-right">
-                <div className="flex items-center justify-end gap-3">
-                  <div className="min-w-0 order-2 md:order-1">
-                    <p className="text-sm font-bold uppercase tracking-wide text-white/60">Away</p>
-                    <p className="mt-1 break-words text-2xl font-black sm:text-4xl">{away?.name ?? "Away"}</p>
-                  </div>
-                  <TeamLogo team={away} size="h-14 w-14" className="order-1 md:order-2" />
-                </div>
-              </Link>
-            </div>
-
-            <div className="mt-6 grid gap-3 text-sm font-bold text-white/75 sm:grid-cols-3">
-              <div className="rounded-lg bg-white/10 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-white/45">Clock</p>
-                <p className="mt-1 text-xl font-black text-white">{clockLabel}</p>
-              </div>
-              <div className="rounded-lg bg-white/10 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-white/45">Court / Hall</p>
-                <p className="mt-1 text-xl font-black text-white">{match.court} / {match.hallSlug}</p>
-              </div>
-              <div className="rounded-lg bg-white/10 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-white/45">Match time</p>
-                <p className="mt-1 text-xl font-black text-white">{match.date} {match.time}</p>
-              </div>
+            <div className="grid grid-cols-2 gap-2 text-sm font-black sm:flex sm:flex-wrap sm:items-center">
+              <span className="rounded-full bg-white px-3 py-2 text-center uppercase text-blue-700 shadow-sm">{match.status}</span>
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-center text-white">{clockLabel}</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/80 sm:col-auto">{match.court}</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/80 sm:col-auto">{match.hallSlug}</span>
             </div>
           </div>
-        </section>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-          <div className="grid gap-6">
-            <Section title={`Timeline (${events.length})`}>
-              <div className={clsx("grid gap-3", eventHighlight && "orso-highlight")}>
-                {events.length > 0 ? (
-                  events.map((event) => {
-                    const team = event.teamId ? getTeam(data, event.teamId) : null;
-                    const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
-
-                    return (
-                      <div key={event.id} className="flex gap-3 rounded-lg border border-blue-100 bg-blue-50/40 px-3 py-3 shadow-sm sm:px-4">
-                        <span className="shrink-0 self-start rounded-lg bg-white px-2.5 py-1 text-sm font-black text-blue-700 shadow-sm">{event.minute}</span>
-                        <EventIcon type={event.type} />
-                        <PlayerAvatar player={player} size="h-9 w-9" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-900">{eventLabels[event.type]}</p>
-                          <p className="mt-1 text-sm text-slate-600">
-                            {[team?.name, player?.name, event.description].filter(Boolean).join(" - ") || "Match event"}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-400">No timeline events yet.</p>
-                )}
+          <div className="mt-5 grid items-stretch gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <ScoreTeamCard label="Home" team={home} events={homeGoalEvents} players={homePlayers} />
+            <div className="flex items-center justify-center rounded-lg bg-white px-5 py-4 text-blue-700 shadow-xl ring-1 ring-white/80">
+              <div className="text-center">
+                <p className="mb-1 text-xs font-black uppercase tracking-[0.24em] text-blue-400">Score</p>
+                <div className="text-6xl font-black leading-none tracking-tight sm:text-7xl lg:text-8xl">
+                  <span>{match.homeScore}</span>
+                  <span className="px-3 text-slate-300">-</span>
+                  <span>{match.awayScore}</span>
+                </div>
               </div>
-            </Section>
-
-            <Section title="Team rosters">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <TeamRoster team={home} players={homePlayers} />
-                <TeamRoster team={away} players={awayPlayers} />
-              </div>
-            </Section>
-
-            <Section title="Player stats">
-              <div className="grid gap-4">
-                <TeamPlayerStats team={home} players={homePlayers} />
-                <TeamPlayerStats team={away} players={awayPlayers} />
-              </div>
-            </Section>
+            </div>
+            <ScoreTeamCard label="Away" team={away} events={awayGoalEvents} players={awayPlayers} align="right" />
           </div>
 
-          <aside className="grid gap-6 self-start">
-            <Section title="Match info">
-              <div className="grid gap-3 text-sm">
-                {[
-                  ["Status", match.status],
-                  ["Sport", match.sport],
-                  ["Group", match.group],
-                  ["Clock", clockLabel],
-                  ["Period", match.periodLabel],
-                  ["Court", match.court],
-                  ["Hall", match.hallSlug],
-                  ["Date", match.date],
-                  ["Time", match.time]
-                ].map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
-                    <span className="font-semibold text-slate-500">{label}</span>
-                    <span className="break-words text-right font-bold text-slate-900">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </Section>
-
-            <Section title="Match report">
-              <p className="leading-7 text-slate-600">
-                {match.report ?? "Report will be published after the match. Scorekeepers can update the match from the admin panel."}
-              </p>
-            </Section>
-          </aside>
+          <div className="mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-3">
+            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
+              <p className="text-xs uppercase tracking-wide text-white/45">Match time</p>
+              <p className="mt-1 text-base font-black text-white sm:text-lg">{match.date} {match.time}</p>
+            </div>
+            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
+              <p className="text-xs uppercase tracking-wide text-white/45">Period</p>
+              <p className="mt-1 text-base font-black text-white sm:text-lg">{match.periodLabel}</p>
+            </div>
+            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
+              <p className="text-xs uppercase tracking-wide text-white/45">Court / Hall</p>
+              <p className="mt-1 break-words text-base font-black text-white sm:text-lg">{match.court} / {match.hallSlug}</p>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <nav className="sticky top-20 z-10 overflow-x-auto rounded-lg border border-blue-100 bg-white/95 p-1 shadow-[0_12px_34px_rgba(37,99,235,0.10)] backdrop-blur">
+        <div className="grid min-w-max grid-cols-4 gap-1 sm:min-w-0">
+          {matchTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={clsx(
+                "rounded-md px-4 py-2.5 text-sm font-black transition",
+                activeTab === tab.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {activeTab === "timeline" ? (
+        <Panel title={`Timeline (${events.length})`} eyebrow="Match events">
+          <div className={clsx("grid gap-3", eventHighlight && "orso-highlight")}>
+            {events.length > 0 ? (
+              events.map((event) => {
+                const team = event.teamId ? getTeam(data, event.teamId) : null;
+                const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+
+                return <TimelineEventCard key={event.id} event={event} team={team} player={player} />;
+              })
+            ) : (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-400">No timeline events yet.</p>
+            )}
+          </div>
+        </Panel>
+      ) : null}
+
+      {activeTab === "lineups" ? (
+        <Panel title="Lineups" eyebrow="Team rosters">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TeamRoster team={home} players={homePlayers} />
+            <TeamRoster team={away} players={awayPlayers} />
+          </div>
+        </Panel>
+      ) : null}
+
+      {activeTab === "stats" ? (
+        <Panel title="Player stats" eyebrow="Match numbers">
+          <div className="grid gap-4">
+            <TeamPlayerStats team={home} players={homePlayers} />
+            <TeamPlayerStats team={away} players={awayPlayers} />
+          </div>
+        </Panel>
+      ) : null}
+
+      {activeTab === "stream" ? (
+        <Panel title="Stream" eyebrow="Live video">
+          {match.youtubeUrl ? (
+            <YouTubeEmbed url={match.youtubeUrl} title={`${home?.name ?? "Home"} vs ${away?.name ?? "Away"} livestream`} />
+          ) : (
+            <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center">
+              <p className="text-base font-black text-blue-950">No live stream available</p>
+              <p className="mt-2 text-sm font-medium text-blue-700">Video will appear here when a YouTube link is added for this match.</p>
+            </div>
+          )}
+        </Panel>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <Panel title="Match info" eyebrow="Details">
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            {[
+              ["Status", match.status],
+              ["Sport", match.sport],
+              ["Group", match.group],
+              ["Clock", clockLabel],
+              ["Period", match.periodLabel],
+              ["Court", match.court],
+              ["Hall", match.hallSlug],
+              ["Date", match.date],
+              ["Time", match.time]
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
+                <span className="font-semibold text-slate-500">{label}</span>
+                <span className="break-words text-right font-bold text-slate-950">{value}</span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title="Match report" eyebrow="Summary">
+          <p className="leading-7 text-slate-600">
+            {match.report ?? "Report will be published after the match. Scorekeepers can update the match from the admin panel."}
+          </p>
+        </Panel>
       </div>
-    </>
+    </div>
   );
 }

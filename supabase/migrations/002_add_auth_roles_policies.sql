@@ -82,7 +82,8 @@ begin
       or old.time is distinct from new.time
       or old.court is distinct from new.court
       or old.hall_slug is distinct from new.hall_slug
-      or old.report is distinct from new.report then
+      or old.report is distinct from new.report
+      or old.youtube_url is distinct from new.youtube_url then
       raise exception 'Scorers can only update score, status, and period label.';
     end if;
   end if;

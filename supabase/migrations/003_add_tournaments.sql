@@ -39,6 +39,9 @@ alter table public.match_stats add column if not exists tournament_id text;
 alter table public.teams add column if not exists logo_url text;
 alter table public.matches add column if not exists clock_label text;
 alter table public.matches add column if not exists clock_running boolean not null default false;
+alter table public.matches add column if not exists clock_started_at timestamptz;
+alter table public.matches add column if not exists clock_base_seconds integer;
+alter table public.matches add column if not exists clock_countdown_seconds integer;
 
 update public.teams
 set tournament_id = 'main-tournament'
@@ -257,7 +260,8 @@ begin
       or old.time is distinct from new.time
       or old.court is distinct from new.court
       or old.hall_slug is distinct from new.hall_slug
-      or old.report is distinct from new.report then
+      or old.report is distinct from new.report
+      or old.youtube_url is distinct from new.youtube_url then
       raise exception 'Scorers can only update score, status, and period label.';
     end if;
   end if;

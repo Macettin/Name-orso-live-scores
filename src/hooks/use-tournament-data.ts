@@ -283,7 +283,21 @@ export function useTournamentData() {
         upsertMatch(data, { ...match, tournamentId: match.tournamentId ?? selectedTournamentId })
       ),
     removeMatch: (matchId: string) => persist(() => deleteSupabaseMatch(matchId), deleteMatch(data, matchId)),
-    saveScore: (matchId: string, score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string; clockLabel?: string; clockRunning?: boolean }) =>
+    saveScore: (
+      matchId: string,
+      score: {
+        homeScore: number;
+        awayScore: number;
+        periodLabel: string;
+        status: MatchStatus;
+        matchMinute?: string;
+        clockLabel?: string;
+        clockRunning?: boolean;
+        clockStartedAt?: string;
+        clockBaseSeconds?: number;
+        clockCountdownSeconds?: number;
+      }
+    ) =>
       persist(() => saveSupabaseScore(matchId, score), updateMatchScore(data, matchId, score)),
     savePlayerMatchStat: (matchId: string, playerId: string, statKey: PlayerStatKey, amount = 1) =>
       persist(() => saveSupabasePlayerMatchStat(matchId, playerId, statKey, amount), addPlayerMatchStat(data, matchId, playerId, statKey, amount)),

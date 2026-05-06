@@ -57,6 +57,10 @@ create table public.matches (
   period_label text not null default 'Pregame',
   clock_label text,
   clock_running boolean not null default false,
+  clock_started_at timestamptz,
+  clock_base_seconds integer,
+  clock_countdown_seconds integer,
+  youtube_url text,
   report text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -160,7 +164,8 @@ begin
       or old.time is distinct from new.time
       or old.court is distinct from new.court
       or old.hall_slug is distinct from new.hall_slug
-      or old.report is distinct from new.report then
+      or old.report is distinct from new.report
+      or old.youtube_url is distinct from new.youtube_url then
       raise exception 'Scorers can only update score, status, and period label.';
     end if;
   end if;

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type Player, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
+import { getYouTubeEmbedUrl } from "./youtube";
 
 let browserClient: SupabaseClient | null = null;
 
@@ -120,6 +121,10 @@ type MatchRow = {
   match_minute: string | null;
   clock_label: string | null;
   clock_running: boolean | null;
+  clock_started_at: string | null;
+  clock_base_seconds: number | null;
+  clock_countdown_seconds: number | null;
+  youtube_url: string | null;
   report: string | null;
 };
 
@@ -248,6 +253,10 @@ function mapMatch(row: MatchRow, teams: Team[]): Match {
     matchMinute: row.match_minute ?? undefined,
     clockLabel: row.clock_label ?? undefined,
     clockRunning: row.clock_running ?? false,
+    clockStartedAt: row.clock_started_at ?? undefined,
+    clockBaseSeconds: row.clock_base_seconds ?? undefined,
+    clockCountdownSeconds: row.clock_countdown_seconds ?? undefined,
+    youtubeUrl: row.youtube_url ?? undefined,
     report: row.report ?? undefined
   };
 }
@@ -313,7 +322,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   ] = await Promise.all([
     supabase
     .from("matches")
-      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,report")
+      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,clock_started_at,clock_base_seconds,clock_countdown_seconds,youtube_url,report")
     .eq("tournament_id", tournamentId)
     .order("date")
       .order("time"),
@@ -541,6 +550,10 @@ export async function saveSupabaseMatch(data: TournamentData, match: Match, tour
     match_minute: normalized.matchMinute ?? null,
     clock_label: normalized.clockLabel ?? null,
     clock_running: normalized.clockRunning ?? false,
+    clock_started_at: normalized.clockStartedAt ?? null,
+    clock_base_seconds: normalized.clockBaseSeconds ?? null,
+    clock_countdown_seconds: normalized.clockCountdownSeconds ?? null,
+    youtube_url: getYouTubeEmbedUrl(normalized.youtubeUrl) ?? null,
     report: normalized.report ?? null
   });
   if (error) throw error;
@@ -556,7 +569,18 @@ export async function deleteSupabaseMatch(matchId: string) {
 
 export async function saveSupabaseScore(
   matchId: string,
-  score: { homeScore: number; awayScore: number; periodLabel: string; status: MatchStatus; matchMinute?: string; clockLabel?: string; clockRunning?: boolean }
+  score: {
+    homeScore: number;
+    awayScore: number;
+    periodLabel: string;
+    status: MatchStatus;
+    matchMinute?: string;
+    clockLabel?: string;
+    clockRunning?: boolean;
+    clockStartedAt?: string;
+    clockBaseSeconds?: number;
+    clockCountdownSeconds?: number;
+  }
 ) {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -570,6 +594,9 @@ export async function saveSupabaseScore(
       match_minute: score.matchMinute || null,
       clock_label: score.clockLabel || null,
       clock_running: score.clockRunning ?? false,
+      clock_started_at: score.clockStartedAt ?? null,
+      clock_base_seconds: score.clockBaseSeconds ?? null,
+      clock_countdown_seconds: score.clockCountdownSeconds ?? null,
       status: score.status
     })
     .eq("id", matchId);

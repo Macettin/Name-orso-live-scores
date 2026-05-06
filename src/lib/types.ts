@@ -81,6 +81,10 @@ export type Match = {
   matchMinute?: string;
   clockLabel?: string;
   clockRunning?: boolean;
+  clockStartedAt?: string;
+  clockBaseSeconds?: number;
+  clockCountdownSeconds?: number;
+  youtubeUrl?: string;
   report?: string;
 };
 

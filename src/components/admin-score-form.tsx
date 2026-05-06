@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { createId } from "@/lib/data-store";
+import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
 import {
   playerStatLabels,
   playerStatsBySport,
@@ -43,7 +44,7 @@ type PlayerForm = {
 };
 type MatchForm = Pick<
   Match,
-  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "report"
+  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report"
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
@@ -101,6 +102,7 @@ const emptyMatch: MatchForm = {
   matchMinute: "",
   clockLabel: "",
   clockRunning: false,
+  youtubeUrl: "",
   report: ""
 };
 
@@ -111,6 +113,12 @@ const emptyEvent: EventForm = {
   type: "goal",
   minute: "",
   description: ""
+};
+
+const periodOptionsBySport: Record<Sport, string[]> = {
+  Football: ["First Half", "Half Time", "Second Half", "Full Time"],
+  Basketball: ["Q1", "Q2", "Half Time", "Q3", "Q4", "Final"],
+  Volleyball: ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5", "Final"]
 };
 
 function labelClass() {
@@ -128,6 +136,15 @@ function sectionTitle(title: string, description: string) {
       <p className="mt-1 text-sm text-slate-400">{description}</p>
     </div>
   );
+}
+
+function sportBadge(sport: Sport) {
+  return <span className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">{sport} mode</span>;
+}
+
+function periodOptionsForSport(sport: Sport, current?: string) {
+  const options = periodOptionsBySport[sport];
+  return current && !options.includes(current) ? [current, ...options] : options;
 }
 
 export function AdminScoreForm() {
@@ -185,6 +202,7 @@ export function AdminScoreForm() {
     [data.matches]
   );
   const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
+  const selectedTournamentSport = selectedTournament?.sportType !== "Mixed" ? selectedTournament?.sportType : undefined;
   const scoreMatches = data.matches;
   const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
   const selectedPlayerStatMatch = data.matches.find((match) => match.id === selectedPlayerStatMatchId) ?? data.matches[0];
@@ -198,9 +216,15 @@ export function AdminScoreForm() {
   const playerFormSport = playerFormTeam?.sport ?? "Volleyball";
   const playerFormStats = playerStatsBySport[playerFormSport];
   const selectedPlayerStatSport = selectedPlayerStatMatch?.sport ?? "Volleyball";
-  const selectedPlayerQuickStats: PlayerStatKey[] = selectedPlayerStatSport === "Football" ? ["goals", "yellow_cards", "red_cards"] : ["points"];
+  const selectedPlayerQuickStats = [...playerStatsBySport[selectedPlayerStatSport]];
   const eventMatches = data.matches;
   const selectedEventMatch = eventMatches.find((match) => match.id === eventForm.matchId) ?? eventMatches[0];
+  const selectedEventSport = selectedEventMatch?.sport ?? selectedTournamentSport;
+  const matchFormHomeTeam = data.teams.find((team) => team.id === (matchForm.homeTeamId || teamOptions[0]?.id));
+  const matchFormSport = matchFormHomeTeam?.sport ?? selectedTournamentSport ?? "Volleyball";
+  const selectedScoreSport = selectedScoreMatch?.sport ?? selectedTournamentSport ?? "Volleyball";
+  const matchPeriodOptions = periodOptionsForSport(matchFormSport, matchForm.periodLabel);
+  const scorePeriodOptions = periodOptionsForSport(selectedScoreSport, selectedScoreMatch?.periodLabel);
   const eventTeamOptions = selectedEventMatch
     ? data.teams.filter((team) => team.id === selectedEventMatch.homeTeamId || team.id === selectedEventMatch.awayTeamId)
     : [];
@@ -312,6 +336,7 @@ export function AdminScoreForm() {
       return;
     }
 
+    const existingMatch = matchForm.id ? data.matches.find((match) => match.id === matchForm.id) : undefined;
     const match: Match = {
       ...matchForm,
       homeTeamId,
@@ -320,6 +345,10 @@ export function AdminScoreForm() {
       sport: homeTeam.sport,
       group: homeTeam.group,
       hallSlug: matchForm.court.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "main-hall",
+      clockStartedAt: existingMatch?.clockStartedAt,
+      clockBaseSeconds: existingMatch?.clockBaseSeconds,
+      clockCountdownSeconds: existingMatch?.clockCountdownSeconds,
+      youtubeUrl: matchForm.youtubeUrl || undefined,
       report: matchForm.report || undefined
     };
     saveMatch(match);
@@ -342,14 +371,40 @@ export function AdminScoreForm() {
       homeScore: Number(formData.get("homeScore") ?? 0),
       awayScore: Number(formData.get("awayScore") ?? 0),
       periodLabel: String(formData.get("periodLabel") ?? ""),
-      matchMinute: String(formData.get("matchMinute") ?? ""),
+      matchMinute: "",
       clockLabel: String(formData.get("clockLabel") ?? ""),
       clockRunning: formData.get("clockRunning") === "on",
       status: String(formData.get("status") ?? "Scheduled") as MatchStatus
     };
 
-    saveScore(selectedScoreMatch.id, score);
+    saveScore(selectedScoreMatch.id, {
+      ...score,
+      clockBaseSeconds: selectedScoreMatch.clockBaseSeconds,
+      clockStartedAt: selectedScoreMatch.clockStartedAt,
+      clockCountdownSeconds: selectedScoreSport === "Basketball" ? Number(formData.get("clockCountdownSeconds") ?? getBasketballDefaultSeconds()) : selectedScoreMatch.clockCountdownSeconds
+    });
     setMessage(`Saved score: ${score.homeScore}-${score.awayScore}`);
+  }
+
+  function applyClockAction(action: "start" | "pause" | "resume" | "reset") {
+    if (!selectedScoreMatch) {
+      return;
+    }
+
+    const clockState = getClockStateForAction(selectedScoreMatch, action);
+    saveScore(selectedScoreMatch.id, {
+      homeScore: selectedScoreMatch.homeScore,
+      awayScore: selectedScoreMatch.awayScore,
+      periodLabel: selectedScoreMatch.periodLabel,
+      matchMinute: selectedScoreSport === "Football" ? selectedScoreMatch.matchMinute : "",
+      clockLabel: clockState.clockLabel ?? (action === "start" || action === "resume" ? "" : selectedScoreMatch.clockLabel),
+      clockRunning: clockState.clockRunning,
+      clockStartedAt: clockState.clockStartedAt,
+      clockBaseSeconds: clockState.clockBaseSeconds,
+      clockCountdownSeconds: clockState.clockCountdownSeconds ?? selectedScoreMatch.clockCountdownSeconds,
+      status: action === "start" || action === "resume" ? "Live" : selectedScoreMatch.status
+    });
+    setMessage(`${action.charAt(0).toUpperCase()}${action.slice(1)} clock: ${formatMatchClock({ ...selectedScoreMatch, ...clockState })}`);
   }
 
   function submitEvent(event: React.FormEvent<HTMLFormElement>) {
@@ -460,6 +515,7 @@ export function AdminScoreForm() {
       matchMinute: match.matchMinute ?? "",
       clockLabel: match.clockLabel ?? "",
       clockRunning: match.clockRunning ?? false,
+      youtubeUrl: match.youtubeUrl ?? "",
       report: match.report ?? ""
     });
   }
@@ -682,6 +738,7 @@ export function AdminScoreForm() {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Players", "Create, edit, and delete roster records with simple stat fields.")}
+          {sportBadge(playerFormSport)}
           {playerForm.id ? (
             <button
               onClick={() => {
@@ -807,6 +864,7 @@ export function AdminScoreForm() {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Matches", "Create, edit, and delete match records. Scores can also be edited here or in the score panel.")}
+          {sportBadge(matchFormSport)}
           {matchForm.id ? (
             <button
               onClick={() => setMatchForm({ ...emptyMatch, homeTeamId: teamOptions[0]?.id ?? "", awayTeamId: teamOptions[1]?.id ?? teamOptions[0]?.id ?? "" })}
@@ -820,7 +878,20 @@ export function AdminScoreForm() {
         <form onSubmit={submitMatch} className="grid gap-4 md:grid-cols-4">
           <label>
             <span className={labelClass()}>Home team</span>
-            <select value={matchForm.homeTeamId || teamOptions[0]?.id || ""} onChange={(event) => setMatchForm({ ...matchForm, homeTeamId: event.target.value })} className={inputClass()}>
+            <select
+              value={matchForm.homeTeamId || teamOptions[0]?.id || ""}
+              onChange={(event) => {
+                const nextTeam = data.teams.find((team) => team.id === event.target.value);
+                const nextSport = nextTeam?.sport ?? matchFormSport;
+                setMatchForm({
+                  ...matchForm,
+                  homeTeamId: event.target.value,
+                  periodLabel: periodOptionsBySport[nextSport][0],
+                  matchMinute: nextSport === "Football" ? matchForm.matchMinute : ""
+                });
+              }}
+              className={inputClass()}
+            >
               {teamOptions.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}
@@ -868,15 +939,32 @@ export function AdminScoreForm() {
           </label>
           <label className="md:col-span-2">
             <span className={labelClass()}>Period label</span>
-            <input value={matchForm.periodLabel} onChange={(event) => setMatchForm({ ...matchForm, periodLabel: event.target.value })} className={inputClass()} />
+            <select value={matchForm.periodLabel} onChange={(event) => setMatchForm({ ...matchForm, periodLabel: event.target.value })} className={inputClass()}>
+              {matchPeriodOptions.map((period) => (
+                <option key={period} value={period}>
+                  {period}
+                </option>
+              ))}
+            </select>
           </label>
+          {matchFormSport === "Football" ? (
           <label>
             <span className={labelClass()}>Match minute</span>
             <input value={matchForm.matchMinute ?? ""} onChange={(event) => setMatchForm({ ...matchForm, matchMinute: event.target.value })} className={inputClass()} placeholder="12' or 45+2'" />
           </label>
+          ) : null}
           <label>
             <span className={labelClass()}>Clock label</span>
-            <input value={matchForm.clockLabel ?? ""} onChange={(event) => setMatchForm({ ...matchForm, clockLabel: event.target.value })} className={inputClass()} placeholder="Q1 08:42, Set 1, HT" />
+            <input
+              value={matchForm.clockLabel ?? ""}
+              onChange={(event) => setMatchForm({ ...matchForm, clockLabel: event.target.value })}
+              className={inputClass()}
+              placeholder={matchFormSport === "Football" ? "37', 45+2', HT" : matchFormSport === "Basketball" ? "Q1 08:42" : "Set 1"}
+            />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>YouTube live/video URL</span>
+            <input value={matchForm.youtubeUrl ?? ""} onChange={(event) => setMatchForm({ ...matchForm, youtubeUrl: event.target.value })} className={inputClass()} placeholder="https://www.youtube.com/watch?v=..." />
           </label>
           <label className="md:col-span-2">
             <span className={labelClass()}>Report</span>
@@ -917,7 +1005,7 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      {selectedTournament?.sportType === "Football" ? (
+      {selectedEventSport === "Football" ? (
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Live timeline", "Add football goals, cards, and substitutions for the selected tournament. Public match pages read these events live.")}
@@ -1019,7 +1107,10 @@ export function AdminScoreForm() {
       {canScore ? (
       <>
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        {sectionTitle("Scores", "Fast score update panel for live scoring.")}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Scores", "Fast score update panel for live scoring.")}
+          {sportBadge(selectedScoreSport)}
+        </div>
         <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}-${selectedScoreMatch?.matchMinute ?? ""}-${selectedScoreMatch?.clockLabel ?? ""}-${selectedScoreMatch?.clockRunning ?? false}`} onSubmit={submitScore} className="mt-5 grid gap-4 md:grid-cols-5">
           <label className="md:col-span-2">
             <span className={labelClass()}>Match</span>
@@ -1053,21 +1144,51 @@ export function AdminScoreForm() {
           </label>
           <label className="md:col-span-2">
             <span className={labelClass()}>Period label</span>
-            <input name="periodLabel" defaultValue={selectedScoreMatch?.periodLabel ?? ""} className={inputClass()} />
+            <select name="periodLabel" defaultValue={selectedScoreMatch?.periodLabel ?? scorePeriodOptions[0]} className={inputClass()}>
+              {scorePeriodOptions.map((period) => (
+                <option key={period} value={period}>
+                  {period}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
-            <span className={labelClass()}>Match minute</span>
-            <input name="matchMinute" defaultValue={selectedScoreMatch?.matchMinute ?? ""} className={inputClass()} placeholder="12' or 45+2'" />
+            <span className={labelClass()}>{selectedScoreSport === "Football" ? "Special clock override" : "Clock label"}</span>
+            <input
+              name="clockLabel"
+              defaultValue={
+                selectedScoreSport === "Football"
+                  ? isFootballClockOverride(selectedScoreMatch?.clockLabel) ? selectedScoreMatch?.clockLabel : ""
+                  : selectedScoreMatch ? formatMatchClock(selectedScoreMatch) : ""
+              }
+              className={inputClass()}
+              placeholder={selectedScoreSport === "Football" ? "HT, FT, Extra time, Penalties" : selectedScoreSport === "Basketball" ? "Q1 08:42" : "Set 1"}
+            />
+            {selectedScoreSport === "Football" ? <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank during normal play. The timer generates 1&apos;, 45+1&apos;, and 90+3&apos; automatically.</span> : null}
           </label>
+          {selectedScoreSport === "Basketball" ? (
           <label>
-            <span className={labelClass()}>Clock label</span>
-            <input name="clockLabel" defaultValue={selectedScoreMatch?.clockLabel ?? ""} className={inputClass()} placeholder="Q1 08:42, Set 1, HT" />
+            <span className={labelClass()}>Countdown length</span>
+            <input name="clockCountdownSeconds" type="number" min={1} defaultValue={selectedScoreMatch?.clockCountdownSeconds ?? getBasketballDefaultSeconds()} className={inputClass()} />
           </label>
+          ) : null}
           <label className="flex items-end gap-2 pb-2">
             <input name="clockRunning" type="checkbox" defaultChecked={selectedScoreMatch?.clockRunning ?? false} className="h-4 w-4 rounded border-slate-300" />
             <span className={labelClass()}>Clock running</span>
           </label>
-          <div className="flex items-end">
+          <div className="flex flex-wrap items-end gap-2 md:col-span-3">
+            <button type="button" onClick={() => applyClockAction("start")} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+              Start clock
+            </button>
+            <button type="button" onClick={() => applyClockAction("pause")} className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50">
+              Pause clock
+            </button>
+            <button type="button" onClick={() => applyClockAction("resume")} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+              Resume clock
+            </button>
+            <button type="button" onClick={() => applyClockAction("reset")} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Reset clock
+            </button>
             <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               <Save size={16} aria-hidden="true" />
               Save score
@@ -1080,12 +1201,15 @@ export function AdminScoreForm() {
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Live player stats", "Update player totals and the match score from one panel.")}
-          {selectedPlayerStatMatch ? (
-            <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
-              {selectedPlayerStatMatchTeams[0]?.name ?? "Home"} {selectedPlayerStatMatch.homeScore}-{selectedPlayerStatMatch.awayScore}{" "}
-              {selectedPlayerStatMatchTeams[1]?.name ?? "Away"}
-            </div>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {sportBadge(selectedPlayerStatSport)}
+            {selectedPlayerStatMatch ? (
+              <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
+                {selectedPlayerStatMatchTeams[0]?.name ?? "Home"} {selectedPlayerStatMatch.homeScore}-{selectedPlayerStatMatch.awayScore}{" "}
+                {selectedPlayerStatMatchTeams[1]?.name ?? "Away"}
+              </div>
+            ) : null}
+          </div>
         </div>
         <label className="block max-w-xl">
           <span className={labelClass()}>Match</span>
@@ -1124,9 +1248,7 @@ export function AdminScoreForm() {
                             #{player.number} {player.name}
                           </p>
                           <p className="text-sm font-semibold text-slate-500">
-                            {selectedPlayerStatSport === "Football"
-                              ? `${player.stats.goals} goals - ${player.stats.yellow_cards} yellow - ${player.stats.red_cards} red`
-                              : `${player.stats.points} points`}
+                            {playerStatsBySport[selectedPlayerStatSport].map((stat) => `${player.stats[stat]} ${playerStatLabels[stat].toLowerCase()}`).join(" - ")}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">

@@ -7,6 +7,7 @@ import { useTournamentData } from "@/hooks/use-tournament-data";
 import { getTeam } from "@/lib/data-store";
 import type { Match, Team } from "@/lib/types";
 import { Card, StatusPill, TeamLogo } from "./ui";
+import { YouTubeEmbed } from "./youtube-embed";
 
 function getFootballMatchTime(match: Match) {
   const rawLabel = (match.matchMinute || match.periodLabel).trim();
@@ -89,6 +90,7 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           <TeamLogo team={away} size="h-10 w-10" />
         </Link>
       </div>
+      {match.youtubeUrl ? <YouTubeEmbed url={match.youtubeUrl} title={`${home.name} vs ${away.name} livestream`} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
         {isFootball && footballTime ? (
           <div className="flex flex-wrap items-center gap-2">
