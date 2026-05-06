@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { TeamLogo } from "@/components/ui";
 import { getTeam } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Player, type PlayerStatKey, type Team } from "@/lib/types";
+import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Player, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
 
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
@@ -46,9 +45,63 @@ function playerInitials(name: string) {
   return initials || "P";
 }
 
+function initials(value: string) {
+  const parts = value.trim().split(/\s+/).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase()).join("") || "T";
+}
+
+function ReportLogo({
+  src,
+  alt,
+  fallback,
+  size = 56,
+  className = ""
+}: {
+  src?: string;
+  alt: string;
+  fallback: string;
+  size?: number;
+  className?: string;
+}) {
+  if (src) {
+    return (
+      <span className={`flex shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white p-1 ${className}`} style={{ width: size, height: size }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={alt} width={size} height={size} className="print-safe-image h-full w-full object-contain" />
+      </span>
+    );
+  }
+
+  return (
+    <span className={`flex shrink-0 items-center justify-center rounded-lg bg-blue-50 font-black text-blue-700 ring-1 ring-blue-100 ${className}`} style={{ width: size, height: size }}>
+      {fallback}
+    </span>
+  );
+}
+
+function TournamentLogo({ tournament }: { tournament?: Tournament }) {
+  return (
+    <ReportLogo
+      src={tournament?.logoUrl || "/orso-logo.png"}
+      alt={tournament?.logoUrl ? `${tournament.name} logo` : "Orso Sports Events logo"}
+      fallback={(tournament?.name || "OR").slice(0, 2).toUpperCase()}
+      size={56}
+    />
+  );
+}
+
+function TeamReportLogo({ team, size = 56 }: { team?: Team; size?: number }) {
+  return <ReportLogo src={team?.logoUrl} alt={team ? `${team.name} logo` : "Team logo"} fallback={team ? initials(team.name) : "T"} size={size} />;
+}
+
 function PlayerAvatar({ player, size = "h-10 w-10" }: { player?: Player | null; size?: string }) {
   if (player?.photoUrl) {
-    return <span aria-hidden="true" className={`${size} shrink-0 rounded-full bg-cover bg-center ring-1 ring-slate-200`} style={{ backgroundImage: `url(${player.photoUrl})` }} />;
+    return (
+      <span className={`${size} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={player.photoUrl} alt={`${player.name} photo`} width={40} height={40} className="print-safe-image h-full w-full object-cover" />
+      </span>
+    );
   }
 
   return (
@@ -78,7 +131,7 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
 function TeamHeader({ team, label }: { team?: Team; label: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <TeamLogo team={team} size="h-14 w-14" />
+      <TeamReportLogo team={team} size={56} />
       <div className="min-w-0">
         <p className="text-xs font-black uppercase tracking-wide text-blue-600">{label}</p>
         <p className="break-words text-xl font-black text-slate-950">{team?.name ?? label}</p>
@@ -91,7 +144,7 @@ function PlayerList({ team, players }: { team?: Team; players: Player[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="flex items-center gap-3 bg-blue-50 px-3 py-3">
-        <TeamLogo team={team} size="h-10 w-10" />
+        <TeamReportLogo team={team} size={40} />
         <h3 className="break-words font-black text-blue-950">{team?.name ?? "Team"}</h3>
       </div>
       <table className="report-table min-w-full divide-y divide-slate-100 text-sm">
@@ -136,7 +189,7 @@ function PlayerStatsTable({ team, players }: { team?: Team; players: Player[] })
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="flex items-center gap-3 bg-slate-50 px-3 py-3">
-        <TeamLogo team={team} size="h-9 w-9" />
+        <TeamReportLogo team={team} size={36} />
         <h3 className="break-words font-black text-slate-950">{team?.name ?? "Team"}</h3>
       </div>
       <div className="overflow-x-auto">
@@ -212,13 +265,7 @@ export default function MatchReportPage() {
         <header className="rounded-lg border border-blue-100 bg-blue-50 p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-              {tournament?.logoUrl ? (
-                <span className="h-14 w-14 shrink-0 rounded-lg bg-white bg-contain bg-center bg-no-repeat ring-1 ring-blue-100" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
-              ) : (
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-lg font-black text-white">
-                  {(tournament?.name || "OR").slice(0, 2).toUpperCase()}
-                </span>
-              )}
+              <TournamentLogo tournament={tournament} />
               <div className="min-w-0">
                 <p className="text-sm font-black uppercase tracking-wide text-blue-700">Match report</p>
                 <h1 className="break-words text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{tournament?.name ?? "Tournament"}</h1>

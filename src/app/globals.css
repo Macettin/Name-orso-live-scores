@@ -61,6 +61,11 @@ a {
   text-transform: uppercase;
 }
 
+.print-safe-image {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 @media print {
   @page {
     size: A4;
@@ -83,6 +88,13 @@ a {
   .report-page {
     max-width: none !important;
     padding: 0 !important;
+  }
+
+  .print-safe-image {
+    display: block !important;
+    max-width: 100% !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 
   .report-section,
