@@ -24,6 +24,17 @@ export const playerStatLabels: Record<PlayerStatKey, string> = {
   yellow_cards: "Yellow cards",
   red_cards: "Red cards"
 };
+export const matchTeamStatKeys = ["total_shots", "shots_on_target", "corners", "fouls", "possession", "yellow_cards", "red_cards"] as const;
+export type MatchTeamStatKey = (typeof matchTeamStatKeys)[number];
+export const matchTeamStatLabels: Record<MatchTeamStatKey, string> = {
+  total_shots: "Total shots",
+  shots_on_target: "Shots on target",
+  corners: "Corners",
+  fouls: "Fouls",
+  possession: "Possession",
+  yellow_cards: "Yellow cards",
+  red_cards: "Red cards"
+};
 
 export type Tournament = {
   id: string;
@@ -98,6 +109,22 @@ export type MatchEvent = {
   minute: string;
   description?: string;
   createdAt?: string;
+};
+
+export type PlayerMatchStat = {
+  tournamentId?: string;
+  matchId: string;
+  teamId?: string;
+  playerId: string;
+  statKey: PlayerStatKey;
+  value: number;
+};
+
+export type MatchTeamStats = {
+  tournamentId?: string;
+  matchId: string;
+  teamId: string;
+  stats: Record<MatchTeamStatKey, number>;
 };
 
 export type Standing = {

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type Player, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -100,9 +100,24 @@ type PlayerRow = {
 
 type MatchStatRow = {
   tournament_id: string;
+  match_id: string;
+  team_id: string | null;
   player_id: string | null;
   stat_key: string;
   stat_value: number | null;
+};
+
+type MatchTeamStatsRow = {
+  tournament_id: string;
+  match_id: string;
+  team_id: string;
+  total_shots: number | null;
+  shots_on_target: number | null;
+  corners: number | null;
+  fouls: number | null;
+  possession: number | null;
+  yellow_cards: number | null;
+  red_cards: number | null;
 };
 
 type MatchRow = {
@@ -275,6 +290,42 @@ function mapMatchEvent(row: MatchEventRow): MatchEvent {
   };
 }
 
+function mapPlayerMatchStat(row: MatchStatRow): PlayerMatchStat | null {
+  if (!row.player_id || !playerStatKeys.includes(row.stat_key as PlayerStatKey)) {
+    return null;
+  }
+
+  return {
+    tournamentId: row.tournament_id,
+    matchId: row.match_id,
+    teamId: row.team_id ?? undefined,
+    playerId: row.player_id,
+    statKey: row.stat_key as PlayerStatKey,
+    value: row.stat_value ?? 0
+  };
+}
+
+function mapMatchTeamStats(row: MatchTeamStatsRow): MatchTeamStats {
+  return {
+    tournamentId: row.tournament_id,
+    matchId: row.match_id,
+    teamId: row.team_id,
+    stats: {
+      total_shots: row.total_shots ?? 0,
+      shots_on_target: row.shots_on_target ?? 0,
+      corners: row.corners ?? 0,
+      fouls: row.fouls ?? 0,
+      possession: row.possession ?? 0,
+      yellow_cards: row.yellow_cards ?? 0,
+      red_cards: row.red_cards ?? 0
+    }
+  };
+}
+
+function isMissingRelationError(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "42P01");
+}
+
 export async function fetchSupabaseTournamentData(tournamentId = "main-tournament"): Promise<TournamentData> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -285,7 +336,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     { data: tournamentRows, error: tournamentError },
     { data: teamRows, error: teamError },
     { data: playerRows, error: playerError },
-    { data: matchStatRows, error: matchStatError }
+    { data: matchStatRows, error: matchStatError },
+    { data: matchTeamStatsRows, error: matchTeamStatsError }
   ] = await Promise.all([
     supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
     supabase.from("teams").select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
@@ -294,16 +346,23 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
       .select("id,tournament_id,team_id,name,number,position,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
       .eq("tournament_id", tournamentId)
       .order("name"),
-    supabase.from("match_stats").select("tournament_id,player_id,stat_key,stat_value").eq("tournament_id", tournamentId)
+    supabase.from("match_stats").select("tournament_id,match_id,team_id,player_id,stat_key,stat_value").eq("tournament_id", tournamentId),
+    supabase
+      .from("match_team_stats")
+      .select("tournament_id,match_id,team_id,total_shots,shots_on_target,corners,fouls,possession,yellow_cards,red_cards")
+      .eq("tournament_id", tournamentId)
   ]);
 
   if (tournamentError) throw tournamentError;
   if (teamError) throw teamError;
   if (playerError) throw playerError;
   if (matchStatError) throw matchStatError;
+  if (matchTeamStatsError && !isMissingRelationError(matchTeamStatsError)) throw matchTeamStatsError;
 
   const teams = ((teamRows ?? []) as TeamRow[]).map(mapTeam);
   const matchStatsByPlayer = new Map<string, Partial<Player["stats"]>>();
+
+  const playerMatchStats = ((matchStatRows ?? []) as MatchStatRow[]).map(mapPlayerMatchStat).filter((stat): stat is PlayerMatchStat => Boolean(stat));
 
   for (const row of (matchStatRows ?? []) as MatchStatRow[]) {
     if (!row.player_id || !playerStatKeys.includes(row.stat_key as PlayerStatKey)) {
@@ -341,7 +400,9 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     teams,
     players: ((playerRows ?? []) as PlayerRow[]).map((row) => mapPlayer(row, matchStatsByPlayer)),
     matches: ((matchRows ?? []) as MatchRow[]).map((row) => mapMatch(row, teams)),
-    events: ((eventRows ?? []) as MatchEventRow[]).map(mapMatchEvent)
+    events: ((eventRows ?? []) as MatchEventRow[]).map(mapMatchEvent),
+    playerMatchStats,
+    matchTeamStats: matchTeamStatsError ? [] : ((matchTeamStatsRows ?? []) as MatchTeamStatsRow[]).map(mapMatchTeamStats)
   };
 }
 
@@ -612,6 +673,27 @@ export async function saveSupabasePlayerMatchStat(matchId: string, playerId: str
     p_player_id: playerId,
     p_stat_key: statKey,
     p_stat_value: amount
+  });
+  if (error) throw error;
+}
+
+export async function saveSupabaseMatchTeamStats(stats: MatchTeamStats, tournamentId = "main-tournament") {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const sanitizedStats = Object.fromEntries(matchTeamStatKeys.map((key) => [key, Math.max(0, Math.round(stats.stats[key] ?? 0))])) as Record<MatchTeamStatKey, number>;
+
+  const { error } = await supabase.from("match_team_stats").upsert({
+    tournament_id: stats.tournamentId ?? tournamentId,
+    match_id: stats.matchId,
+    team_id: stats.teamId,
+    total_shots: sanitizedStats.total_shots,
+    shots_on_target: sanitizedStats.shots_on_target,
+    corners: sanitizedStats.corners,
+    fouls: sanitizedStats.fouls,
+    possession: sanitizedStats.possession,
+    yellow_cards: sanitizedStats.yellow_cards,
+    red_cards: sanitizedStats.red_cards
   });
   if (error) throw error;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { TournamentDataProvider } from "@/hooks/use-tournament-data";
 
 export const metadata: Metadata = {
   title: "Orso Live Scores",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <TournamentDataProvider>
+          <AppShell>{children}</AppShell>
+        </TournamentDataProvider>
       </body>
     </html>
   );

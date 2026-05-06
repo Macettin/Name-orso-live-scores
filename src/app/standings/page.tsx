@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { clsx } from "clsx";
+import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { PageHeader, TeamLogo } from "@/components/ui";
 import { buildStandings, getTeam, type TournamentData } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -135,12 +136,12 @@ function Leaderboard({ data, type }: { data: TournamentData; type: "scoring" | "
 }
 
 export default function StandingsPage() {
-  const { data } = useTournamentData();
+  const { data, lastUpdatedAt } = useTournamentData();
   const [activeTab, setActiveTab] = useState<StandingsTab>("teams");
 
   return (
     <>
-      <PageHeader title="Group standings" description="Tournament tables and player leaderboards for the selected tournament." />
+      <PageHeader title="Group standings" description="Tournament tables and player leaderboards for the selected tournament." action={<LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />} />
 
       <nav className="mb-5 overflow-x-auto rounded-lg border border-blue-100 bg-white p-1 shadow-[0_12px_34px_rgba(37,99,235,0.08)]">
         <div className="grid min-w-max grid-cols-3 gap-1 sm:min-w-0">

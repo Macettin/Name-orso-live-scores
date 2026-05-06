@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -115,7 +116,7 @@ function TeamPanel({
 
 export default function ScoreboardPage() {
   const params = useParams<{ matchId: string }>();
-  const { data } = useTournamentData();
+  const { data, lastUpdatedAt } = useTournamentData();
   const [now, setNow] = useState<number | null>(null);
   const match = data.matches.find((item) => item.id === params.matchId);
 
@@ -174,6 +175,9 @@ export default function ScoreboardPage() {
           <div className="flex items-center gap-3 rounded-2xl bg-white/10 px-5 py-3">
             {match.status === "Live" ? <span className="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.9)]" /> : null}
             <span className="text-xl font-black uppercase tracking-wide">{match.status}</span>
+          </div>
+          <div className="hidden xl:block">
+            <LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />
           </div>
         </div>
       </header>

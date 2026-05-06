@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
+import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { PageHeader, TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
-import { getTeam } from "@/lib/data-store";
+import { getMatchTeamStats, getTeam, type TournamentData } from "@/lib/data-store";
 import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Player, type PlayerStatKey, type Team } from "@/lib/types";
+import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team } from "@/lib/types";
 
 type MatchTab = "timeline" | "lineups" | "stats" | "stream";
 
@@ -232,6 +233,132 @@ function TeamPlayerStats({ team, players }: { team?: Team; players: Player[] }) 
   );
 }
 
+function comparisonPercent(homeValue: number, awayValue: number, statKey: MatchTeamStatKey) {
+  if (statKey === "possession") {
+    return Math.max(0, Math.min(100, homeValue));
+  }
+
+  const total = homeValue + awayValue;
+  return total > 0 ? (homeValue / total) * 100 : 50;
+}
+
+function MatchStatisticsPanel({ data, match, home, away }: { data: TournamentData; match: Match; home?: Team; away?: Team }) {
+  const homeStats = getMatchTeamStats(data, match.id, match.homeTeamId);
+  const awayStats = getMatchTeamStats(data, match.id, match.awayTeamId);
+
+  return (
+    <Panel title="Match Statistics" eyebrow="Team comparison">
+      <div className="grid gap-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <TeamLogo team={home} size="h-9 w-9" />
+            <span className="break-words text-sm font-black text-blue-950">{home?.name ?? "Home"}</span>
+          </div>
+          <span className="text-xs font-black uppercase tracking-wide text-blue-500">Stats</span>
+          <div className="flex min-w-0 items-center justify-end gap-2 text-right">
+            <span className="break-words text-sm font-black text-blue-950">{away?.name ?? "Away"}</span>
+            <TeamLogo team={away} size="h-9 w-9" />
+          </div>
+        </div>
+        {matchTeamStatKeys.map((statKey) => {
+          const homeValue = homeStats.stats[statKey];
+          const awayValue = awayStats.stats[statKey];
+          const homePercent = comparisonPercent(homeValue, awayValue, statKey);
+          const awayPercent = 100 - homePercent;
+
+          return (
+            <div key={statKey} className="grid gap-2 rounded-lg border border-slate-100 bg-white px-3 py-3">
+              <div className="grid grid-cols-[3rem_1fr_3rem] items-center gap-3 text-sm">
+                <span className="font-black text-slate-950">{statKey === "possession" ? `${homeValue}%` : homeValue}</span>
+                <span className="text-center text-xs font-black uppercase tracking-wide text-slate-500">{matchTeamStatLabels[statKey]}</span>
+                <span className="text-right font-black text-slate-950">{statKey === "possession" ? `${awayValue}%` : awayValue}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <div className="flex h-2 justify-end rounded-full bg-slate-100">
+                  <span className="h-2 rounded-full bg-blue-600" style={{ width: `${homePercent}%` }} />
+                </div>
+                <div className="flex h-2 justify-start rounded-full bg-slate-100">
+                  <span className="h-2 rounded-full bg-slate-900" style={{ width: `${awayPercent}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function TopPerformerCard({ title, stat, player, team, value }: { title: string; stat: string; player?: Player; team?: Team; value: number }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+      <p className="text-xs font-black uppercase tracking-wide text-blue-600">{title}</p>
+      {player ? (
+        <div className="mt-3 flex min-w-0 items-center gap-3">
+          <PlayerAvatar player={player} size="h-12 w-12" />
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-base font-black text-slate-950">{player.name}</p>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <TeamLogo team={team} size="h-6 w-6" />
+              <p className="break-words text-sm font-semibold text-slate-500">{team?.name ?? "Team"}</p>
+            </div>
+          </div>
+          <div className="rounded-lg bg-blue-50 px-3 py-2 text-right">
+            <p className="text-2xl font-black text-blue-700">{value}</p>
+            <p className="text-xs font-black uppercase text-blue-500">{stat}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-400">No data yet.</p>
+      )}
+    </div>
+  );
+}
+
+function topPlayerForStat(stats: PlayerMatchStat[], players: Player[], statKey: PlayerStatKey) {
+  const totals = new Map<string, number>();
+
+  stats
+    .filter((stat) => stat.statKey === statKey)
+    .forEach((stat) => totals.set(stat.playerId, (totals.get(stat.playerId) ?? 0) + stat.value));
+
+  const [playerId, value] = Array.from(totals.entries()).sort((first, second) => second[1] - first[1])[0] ?? [];
+  const player = playerId ? players.find((item) => item.id === playerId) : undefined;
+
+  return { player, value: value ?? 0 };
+}
+
+function topPlayerForCards(stats: PlayerMatchStat[], players: Player[]) {
+  const totals = new Map<string, number>();
+
+  stats
+    .filter((stat) => stat.statKey === "yellow_cards" || stat.statKey === "red_cards")
+    .forEach((stat) => totals.set(stat.playerId, (totals.get(stat.playerId) ?? 0) + stat.value));
+
+  const [playerId, value] = Array.from(totals.entries()).sort((first, second) => second[1] - first[1])[0] ?? [];
+  const player = playerId ? players.find((item) => item.id === playerId) : undefined;
+
+  return { player, value: value ?? 0 };
+}
+
+function TopPerformers({ data, match, players }: { data: TournamentData; match: Match; players: Player[] }) {
+  const matchStats = data.playerMatchStats.filter((stat) => stat.matchId === match.id);
+  const scoringStat: PlayerStatKey = match.sport === "Football" ? "goals" : "points";
+  const topScorer = topPlayerForStat(matchStats, players, scoringStat);
+  const assistLeader = topPlayerForStat(matchStats, players, "assists");
+  const cardsLeader = topPlayerForCards(matchStats, players);
+
+  return (
+    <Panel title="Top Performers" eyebrow="Player impact">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <TopPerformerCard title="Top scorer" stat={scoringStat === "goals" ? "Goals" : "Points"} player={topScorer.player} team={topScorer.player ? getTeam(data, topScorer.player.teamId) : undefined} value={topScorer.value} />
+        <TopPerformerCard title="Assist leader" stat="Assists" player={assistLeader.player} team={assistLeader.player ? getTeam(data, assistLeader.player.teamId) : undefined} value={assistLeader.value} />
+        <TopPerformerCard title="Most cards" stat="Cards" player={cardsLeader.player} team={cardsLeader.player ? getTeam(data, cardsLeader.player.teamId) : undefined} value={cardsLeader.value} />
+      </div>
+    </Panel>
+  );
+}
+
 function ScoreTeamCard({
   label,
   team,
@@ -267,7 +394,7 @@ function ScoreTeamCard({
 
 export default function MatchPage() {
   const params = useParams<{ matchId: string }>();
-  const { data } = useTournamentData();
+  const { data, lastUpdatedAt } = useTournamentData();
   const match = data.matches.find((item) => item.id === params.matchId);
   const scoreSignature = match ? `${match.homeScore}-${match.awayScore}-${match.status}-${match.matchMinute ?? ""}-${match.periodLabel}` : "";
   const eventSignature = data.events
@@ -315,6 +442,7 @@ export default function MatchPage() {
   const awayGoalEvents = goalEvents.filter((event) => event.teamId === match.awayTeamId);
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
+  const matchPlayers = [...homePlayers, ...awayPlayers];
   const accent = tournament?.primaryColor || "#2563eb";
   const clockLabel = formatMatchClock(match);
 
@@ -327,7 +455,8 @@ export default function MatchPage() {
             {home?.name ?? "Home"} vs {away?.name ?? "Away"}
           </h1>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />
           <Link href={`/reports/match/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto">
             Match report
           </Link>
@@ -399,6 +528,9 @@ export default function MatchPage() {
           </div>
         </div>
       </section>
+
+      <MatchStatisticsPanel data={data} match={match} home={home} away={away} />
+      <TopPerformers data={data} match={match} players={matchPlayers} />
 
       <nav className="sticky top-20 z-10 overflow-x-auto rounded-lg border border-blue-100 bg-white/95 p-1 shadow-[0_12px_34px_rgba(37,99,235,0.10)] backdrop-blur">
         <div className="grid min-w-max grid-cols-4 gap-1 sm:min-w-0">

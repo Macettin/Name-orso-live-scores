@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { clsx } from "clsx";
-import { useTournamentData } from "@/hooks/use-tournament-data";
 import { getTeam } from "@/lib/data-store";
 import type { Match, Team } from "@/lib/types";
 import { Card, StatusPill, TeamLogo } from "./ui";
@@ -38,12 +37,11 @@ function getFootballMatchTime(match: Match) {
 }
 
 export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
-  const { data, selectedTournamentId } = useTournamentData();
-  const teamData = teams ?? data.teams;
-  const home = getTeam({ ...data, teams: teamData }, match.homeTeamId);
-  const away = getTeam({ ...data, teams: teamData }, match.awayTeamId);
-  const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
-  const isFootball = selectedTournament?.sportType === "Football";
+  const teamData = teams ?? [];
+  const lookupData = { tournaments: [], teams: teamData, players: [], matches: [], events: [], playerMatchStats: [], matchTeamStats: [] };
+  const home = getTeam(lookupData, match.homeTeamId);
+  const away = getTeam(lookupData, match.awayTeamId);
+  const isFootball = match.sport === "Football";
   const footballTime = isFootball ? getFootballMatchTime(match) : null;
 
   if (!home || !away) {

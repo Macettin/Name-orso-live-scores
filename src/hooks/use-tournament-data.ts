@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   deleteMatch,
   deleteMatchEvent,
@@ -8,6 +8,7 @@ import {
   deleteTeam,
   deleteTournament,
   addPlayerMatchStat,
+  upsertMatchTeamStats,
   type TournamentData,
   updateMatchScore,
   upsertMatchEvent,
@@ -32,6 +33,7 @@ import {
   isSupabaseConfigured,
   saveSupabaseMatch,
   saveSupabaseMatchEvent,
+  saveSupabaseMatchTeamStats,
   saveSupabasePlayer,
   saveSupabasePlayerMatchStat,
   saveSupabaseScore,
@@ -42,14 +44,16 @@ import {
   uploadSupabasePlayerPhoto,
   uploadSupabaseTeamLogo
 } from "@/lib/supabase";
-import type { Match, MatchEvent, MatchStatus, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, UserProfile } from "@/lib/types";
+import type { Match, MatchEvent, MatchStatus, MatchTeamStats, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, UserProfile } from "@/lib/types";
 
 const emptyTournamentData: TournamentData = {
   tournaments: [],
   teams: [],
   players: [],
   matches: [],
-  events: []
+  events: [],
+  playerMatchStats: [],
+  matchTeamStats: []
 };
 const defaultTournamentId = "main-tournament";
 const selectedTournamentStorageKey = "orso-selected-tournament";
@@ -63,7 +67,7 @@ function getInitialTournamentId() {
   return window.localStorage.getItem(selectedTournamentStorageKey) || defaultTournamentId;
 }
 
-export function useTournamentData() {
+function useTournamentDataState() {
   const [data, setData] = useState<TournamentData>(emptyTournamentData);
   const [selectedTournamentId, setSelectedTournamentIdState] = useState(getInitialTournamentId);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -72,7 +76,11 @@ export function useTournamentData() {
   const [authLoading, setAuthLoading] = useState(() => isSupabaseConfigured());
   const [supabaseEnabled] = useState(isSupabaseConfigured());
   const [lastError, setLastError] = useState<string | null>(supabaseEnabled ? null : "Supabase is not configured.");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const hookId = useId();
   const refreshInFlight = useRef<{ tournamentId: string; promise: Promise<void> } | null>(null);
+  const refreshQueued = useRef(false);
+  const realtimeChannelName = `orso-live-score-data-${hookId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   const syncProfile = useCallback(async () => {
     if (!supabaseEnabled) {
@@ -108,13 +116,22 @@ export function useTournamentData() {
   const refresh = useCallback(async () => {
     if (!supabaseEnabled) {
       setData(emptyTournamentData);
+      setLastUpdatedAt(new Date().toISOString());
       return;
     }
 
-    if (!refreshInFlight.current || refreshInFlight.current.tournamentId !== selectedTournamentId) {
+    if (refreshInFlight.current?.tournamentId === selectedTournamentId) {
+      refreshQueued.current = true;
+      await refreshInFlight.current.promise;
+      return;
+    }
+
+    do {
+      refreshQueued.current = false;
       const promise = fetchSupabaseTournamentData(selectedTournamentId)
         .then((nextData) => {
           setData(nextData);
+          setLastUpdatedAt(new Date().toISOString());
           setLastError(null);
         })
         .catch((error) => {
@@ -127,9 +144,9 @@ export function useTournamentData() {
         });
 
       refreshInFlight.current = { tournamentId: selectedTournamentId, promise };
-    }
 
-    await refreshInFlight.current.promise;
+      await promise;
+    } while (refreshQueued.current);
   }, [selectedTournamentId, supabaseEnabled]);
 
   const setSelectedTournamentId = useCallback((tournamentId: string) => {
@@ -157,22 +174,17 @@ export function useTournamentData() {
       return;
     }
 
-    for (const channel of supabase.getChannels()) {
-      if (channel.topic === "realtime:orso-live-score-data") {
-        void supabase.removeChannel(channel);
-      }
-    }
-
     let realtimeChannelRemoved = false;
     const authSubscription = supabase.auth.onAuthStateChange(() => {
       void syncProfile();
     });
     const realtimeChannel = supabase
-      .channel("orso-live-score-data")
+      .channel(realtimeChannelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_stats" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_stats" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "team_admins" }, () => void syncProfile())
@@ -185,7 +197,7 @@ export function useTournamentData() {
         void supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [refresh, supabaseEnabled, syncProfile]);
+  }, [realtimeChannelName, refresh, supabaseEnabled, syncProfile]);
 
   useEffect(() => {
     function handleSelectedTournamentChange(event: Event) {
@@ -208,6 +220,7 @@ export function useTournamentData() {
 
   async function persist(operation: () => Promise<void>, optimisticData: TournamentData) {
     setData(optimisticData);
+    setLastUpdatedAt(new Date().toISOString());
 
     if (!supabaseEnabled) {
       setLastError("Supabase is not configured. Changes were not saved.");
@@ -238,6 +251,7 @@ export function useTournamentData() {
     authLoading,
     supabaseEnabled,
     lastError,
+    lastUpdatedAt,
     selectedTournamentId,
     setSelectedTournamentId,
     canManageAll: profile?.role === "admin",
@@ -301,6 +315,11 @@ export function useTournamentData() {
       persist(() => saveSupabaseScore(matchId, score), updateMatchScore(data, matchId, score)),
     savePlayerMatchStat: (matchId: string, playerId: string, statKey: PlayerStatKey, amount = 1) =>
       persist(() => saveSupabasePlayerMatchStat(matchId, playerId, statKey, amount), addPlayerMatchStat(data, matchId, playerId, statKey, amount)),
+    saveMatchTeamStats: (stats: MatchTeamStats) =>
+      persist(
+        () => saveSupabaseMatchTeamStats({ ...stats, tournamentId: stats.tournamentId ?? selectedTournamentId }, selectedTournamentId),
+        upsertMatchTeamStats(data, { ...stats, tournamentId: stats.tournamentId ?? selectedTournamentId })
+      ),
     saveEvent: (event: MatchEvent) =>
       persist(
         () => saveSupabaseMatchEvent({ ...event, tournamentId: event.tournamentId ?? selectedTournamentId }, selectedTournamentId),
@@ -308,4 +327,24 @@ export function useTournamentData() {
       ),
     removeEvent: (eventId: string) => persist(() => deleteSupabaseMatchEvent(eventId), deleteMatchEvent(data, eventId))
   };
+}
+
+type TournamentDataContextValue = ReturnType<typeof useTournamentDataState>;
+
+const TournamentDataContext = createContext<TournamentDataContextValue | null>(null);
+
+export function TournamentDataProvider({ children }: { children: ReactNode }) {
+  const value = useTournamentDataState();
+
+  return createElement(TournamentDataContext.Provider, { value }, children);
+}
+
+export function useTournamentData() {
+  const context = useContext(TournamentDataContext);
+
+  if (!context) {
+    throw new Error("useTournamentData must be used within TournamentDataProvider.");
+  }
+
+  return context;
 }

@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import { createId } from "@/lib/data-store";
+import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
 import {
   playerStatLabels,
   playerStatsBySport,
+  matchTeamStatKeys,
+  matchTeamStatLabels,
   sportOptions,
   tournamentSportOptions,
   type Match,
   type MatchEvent,
+  type MatchTeamStatKey,
   type MatchEventType,
   type MatchStatus,
   type Player,
@@ -170,6 +173,7 @@ export function AdminScoreForm() {
     removeMatch,
     saveScore,
     savePlayerMatchStat,
+    saveMatchTeamStats,
     saveEvent,
     removeEvent,
     assignClubAdmin,
@@ -188,6 +192,7 @@ export function AdminScoreForm() {
   }));
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
+  const [selectedTeamStatsMatchId, setSelectedTeamStatsMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [eventForm, setEventForm] = useState<EventForm>(() => ({ ...emptyEvent, matchId: data.matches[0]?.id ?? "" }));
   const [clubAdminEmail, setClubAdminEmail] = useState("");
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
@@ -206,6 +211,7 @@ export function AdminScoreForm() {
   const scoreMatches = data.matches;
   const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
   const selectedPlayerStatMatch = data.matches.find((match) => match.id === selectedPlayerStatMatchId) ?? data.matches[0];
+  const selectedTeamStatsMatch = data.matches.find((match) => match.id === selectedTeamStatsMatchId) ?? data.matches[0];
   const selectedPlayerStatMatchTeams = selectedPlayerStatMatch
     ? data.teams.filter((team) => team.id === selectedPlayerStatMatch.homeTeamId || team.id === selectedPlayerStatMatch.awayTeamId)
     : [];
@@ -223,6 +229,9 @@ export function AdminScoreForm() {
   const matchFormHomeTeam = data.teams.find((team) => team.id === (matchForm.homeTeamId || teamOptions[0]?.id));
   const matchFormSport = matchFormHomeTeam?.sport ?? selectedTournamentSport ?? "Volleyball";
   const selectedScoreSport = selectedScoreMatch?.sport ?? selectedTournamentSport ?? "Volleyball";
+  const selectedTeamStatsTeams = selectedTeamStatsMatch
+    ? data.teams.filter((team) => team.id === selectedTeamStatsMatch.homeTeamId || team.id === selectedTeamStatsMatch.awayTeamId)
+    : [];
   const matchPeriodOptions = periodOptionsForSport(matchFormSport, matchForm.periodLabel);
   const scorePeriodOptions = periodOptionsForSport(selectedScoreSport, selectedScoreMatch?.periodLabel);
   const eventTeamOptions = selectedEventMatch
@@ -384,6 +393,31 @@ export function AdminScoreForm() {
       clockCountdownSeconds: selectedScoreSport === "Basketball" ? Number(formData.get("clockCountdownSeconds") ?? getBasketballDefaultSeconds()) : selectedScoreMatch.clockCountdownSeconds
     });
     setMessage(`Saved score: ${score.homeScore}-${score.awayScore}`);
+  }
+
+  function submitMatchTeamStats(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTeamStatsMatch) {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+
+    selectedTeamStatsTeams.forEach((team) => {
+      const stats = Object.fromEntries(
+        matchTeamStatKeys.map((key) => [key, Number(formData.get(`${team.id}:${key}`) ?? 0)])
+      ) as Record<MatchTeamStatKey, number>;
+
+      saveMatchTeamStats({
+        tournamentId: selectedTeamStatsMatch.tournamentId ?? selectedTournamentId,
+        matchId: selectedTeamStatsMatch.id,
+        teamId: team.id,
+        stats
+      });
+    });
+
+    setMessage(`Saved match statistics for ${selectedTeamStatsMatch.court}.`);
   }
 
   function applyClockAction(action: "start" | "pause" | "resume" | "reset") {
@@ -1204,6 +1238,61 @@ export function AdminScoreForm() {
           </div>
         </form>
         {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-400">No matches are available.</p> : null}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Match team statistics", "Add professional match dashboard stats for the public match center.")}
+          {selectedTeamStatsMatch ? sportBadge(selectedTeamStatsMatch.sport) : null}
+        </div>
+        <form key={`${selectedTeamStatsMatch?.id ?? "none"}-${data.matchTeamStats.length}`} onSubmit={submitMatchTeamStats} className="grid gap-5">
+          <label className="block max-w-xl">
+            <span className={labelClass()}>Match</span>
+            <select value={selectedTeamStatsMatch?.id ?? ""} onChange={(event) => setSelectedTeamStatsMatchId(event.target.value)} className={inputClass()}>
+              {data.matches.map((match) => {
+                const home = data.teams.find((team) => team.id === match.homeTeamId);
+                const away = data.teams.find((team) => team.id === match.awayTeamId);
+                return (
+                  <option key={match.id} value={match.id}>
+                    {home?.name} vs {away?.name} - {match.court}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          {selectedTeamStatsMatch ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {selectedTeamStatsTeams.map((team) => {
+                const existingStats = getMatchTeamStats(data, selectedTeamStatsMatch.id, team.id);
+
+                return (
+                  <div key={team.id} className="rounded-lg border border-slate-200 p-4">
+                    <div className="mb-4">
+                      <p className="font-black text-slate-900">{team.name}</p>
+                      <p className="text-sm font-semibold text-slate-400">{team.id === selectedTeamStatsMatch.homeTeamId ? "Home team" : "Away team"}</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {matchTeamStatKeys.map((statKey) => (
+                        <label key={statKey}>
+                          <span className={labelClass()}>{matchTeamStatLabels[statKey]}</span>
+                          <input name={`${team.id}:${statKey}`} type="number" min={0} max={statKey === "possession" ? 100 : undefined} defaultValue={existingStats.stats[statKey]} className={inputClass()} />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">No matches are available.</p>
+          )}
+          <div>
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              <Save size={16} aria-hidden="true" />
+              Save match statistics
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
