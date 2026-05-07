@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
-import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
 import {
@@ -738,9 +738,16 @@ export function AdminScoreForm() {
           <button
             type="button"
             onClick={toggleAdminDarkMode}
-            className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+            aria-pressed={adminDarkMode}
+            className={clsx(
+              "inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black shadow-sm transition sm:w-auto",
+              adminDarkMode
+                ? "border-blue-400 bg-blue-600 text-white hover:bg-blue-500"
+                : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+            )}
           >
-            {adminDarkMode ? "Light mode" : "Dark mode"}
+            {adminDarkMode ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+            {adminDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           </button>
         </div>
         <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
