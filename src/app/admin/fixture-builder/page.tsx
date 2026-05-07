@@ -139,6 +139,9 @@ function scheduleFixtures({
       matchMinute: "",
       clockLabel: "",
       clockRunning: false,
+      clockStartedAt: undefined,
+      clockBaseSeconds: 0,
+      clockCountdownSeconds: undefined,
       report: pair.report
     };
   });
