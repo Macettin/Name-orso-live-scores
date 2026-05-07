@@ -142,6 +142,76 @@ textarea {
     border-color: var(--orso-blue);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   }
+
+  .admin-dashboard.admin-dark {
+    color: #e5e7eb;
+  }
+
+  .admin-dashboard.admin-dark .admin-shell,
+  .admin-dashboard.admin-dark .admin-panel,
+  .admin-dashboard.admin-dark .bg-white {
+    border-color: rgba(96, 165, 250, 0.22);
+    background: #0f172a;
+    color: #e5e7eb;
+  }
+
+  .admin-dashboard.admin-dark .bg-slate-50,
+  .admin-dashboard.admin-dark .bg-blue-50 {
+    background: rgba(30, 41, 59, 0.82);
+  }
+
+  .admin-dashboard.admin-dark .text-slate-950,
+  .admin-dashboard.admin-dark .text-slate-900,
+  .admin-dashboard.admin-dark .text-blue-950 {
+    color: #f8fafc;
+  }
+
+  .admin-dashboard.admin-dark .text-slate-700,
+  .admin-dashboard.admin-dark .text-slate-600,
+  .admin-dashboard.admin-dark .text-slate-500,
+  .admin-dashboard.admin-dark .text-slate-400 {
+    color: #cbd5e1;
+  }
+
+  .admin-dashboard.admin-dark .text-blue-700,
+  .admin-dashboard.admin-dark .text-blue-600 {
+    color: #93c5fd;
+  }
+
+  .admin-dashboard.admin-dark .border-slate-200,
+  .admin-dashboard.admin-dark .border-slate-300,
+  .admin-dashboard.admin-dark .border-blue-100,
+  .admin-dashboard.admin-dark .border-blue-200 {
+    border-color: rgba(96, 165, 250, 0.24);
+  }
+
+  .admin-dashboard.admin-dark input,
+  .admin-dashboard.admin-dark select,
+  .admin-dashboard.admin-dark textarea,
+  .admin-dashboard.admin-dark .orso-input {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: #111827;
+    color: #f8fafc;
+  }
+
+  .admin-dashboard.admin-dark input::placeholder,
+  .admin-dashboard.admin-dark textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .admin-dashboard.admin-dark table,
+  .admin-dashboard.admin-dark tbody {
+    background: #0f172a;
+  }
+
+  .admin-dashboard.admin-dark thead {
+    background: #111827;
+  }
+
+  .admin-dashboard.admin-dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  .admin-dashboard.admin-dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(96, 165, 250, 0.18);
+  }
 }
 
 @keyframes orso-pulse-highlight {

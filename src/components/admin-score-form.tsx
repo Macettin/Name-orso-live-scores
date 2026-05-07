@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { clsx } from "clsx";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -124,6 +125,35 @@ const periodOptionsBySport: Record<Sport, string[]> = {
   Volleyball: ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5", "Final"]
 };
 
+type AdminSection =
+  | "overview"
+  | "tournaments"
+  | "teams"
+  | "players"
+  | "matches"
+  | "live_scoring"
+  | "timeline"
+  | "match_stats"
+  | "fixture_builder"
+  | "club_admins"
+  | "reports";
+
+const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminOnly?: boolean }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "tournaments", label: "Tournaments", adminOnly: true },
+  { id: "teams", label: "Teams", adminOnly: true },
+  { id: "players", label: "Players", adminOnly: true },
+  { id: "matches", label: "Matches", adminOnly: true },
+  { id: "live_scoring", label: "Live Scoring", scorer: true },
+  { id: "timeline", label: "Timeline Events", adminOnly: true },
+  { id: "match_stats", label: "Match Stats", scorer: true },
+  { id: "fixture_builder", label: "Fixture Builder", adminOnly: true },
+  { id: "club_admins", label: "Club Admins", adminOnly: true },
+  { id: "reports", label: "Reports", adminOnly: true }
+];
+
+const adminDarkModeStorageKey = "orso-admin-dark-mode";
+
 function labelClass() {
   return "text-sm font-bold text-slate-700";
 }
@@ -198,6 +228,8 @@ export function AdminScoreForm() {
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
   const [clockPreviewNow, setClockPreviewNow] = useState(0);
+  const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
+  const [adminDarkMode, setAdminDarkMode] = useState(() => (typeof window === "undefined" ? false : window.localStorage.getItem(adminDarkModeStorageKey) === "true"));
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
   const courtOptions = useMemo(
@@ -240,6 +272,25 @@ export function AdminScoreForm() {
     : [];
   const eventPlayerOptions = data.players.filter((player) => !eventForm.teamId || player.teamId === eventForm.teamId);
   const matchEvents = data.events.filter((item) => !selectedEventMatch || item.matchId === selectedEventMatch.id);
+  const visibleAdminSections = adminSections.filter((section) => (section.adminOnly ? canManageAll : true) && (section.scorer ? canScore : true));
+
+  function adminPanelClass(section: AdminSection, tone: "default" | "blue" = "default") {
+    return clsx(
+      "admin-panel rounded-xl border p-5 shadow-sm",
+      tone === "blue" ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white",
+      activeAdminSection !== section && "hidden"
+    );
+  }
+
+  function toggleAdminDarkMode() {
+    setAdminDarkMode((current) => {
+      const next = !current;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(adminDarkModeStorageKey, String(next));
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!selectedScoreMatch?.clockRunning) {
@@ -667,7 +718,7 @@ export function AdminScoreForm() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className={clsx("admin-dashboard grid gap-6 rounded-2xl transition-colors", adminDarkMode && "admin-dark")}>
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
         {lastError ?? message}
       </div>
@@ -678,11 +729,42 @@ export function AdminScoreForm() {
         </div>
       ) : null}
 
+      <section className="admin-shell rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 px-2">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Admin dashboard</p>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Control center</h2>
+          </div>
+          <button
+            type="button"
+            onClick={toggleAdminDarkMode}
+            className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+          >
+            {adminDarkMode ? "Light mode" : "Dark mode"}
+          </button>
+        </div>
+        <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          {visibleAdminSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActiveAdminSection(section.id)}
+              className={clsx(
+                "rounded-xl px-3 py-2.5 text-left text-sm font-black transition",
+                activeAdminSection === section.id ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" : "bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+              )}
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+      </section>
+
       {profile ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={adminPanelClass("overview")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Signed in</h2>
+              <h2 className="text-lg font-bold text-slate-900">Overview</h2>
               <p className="mt-1 text-sm text-slate-400">
                 {profile.email} - {profile.role}
               </p>
@@ -692,12 +774,25 @@ export function AdminScoreForm() {
               Sign out
             </button>
           </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Tournaments", data.tournaments.length],
+              ["Teams", data.teams.length],
+              ["Players", data.players.length],
+              ["Matches", data.matches.length]
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-600">{label}</p>
+                <p className="mt-1 text-3xl font-black text-blue-950">{value}</p>
+              </div>
+            ))}
+          </div>
         </section>
       ) : null}
 
       {canManageAll ? (
         <>
-      <section className="rounded-lg border border-blue-200 bg-blue-50 p-5 shadow-sm">
+      <section className={adminPanelClass("fixture_builder", "blue")}>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/70 p-4">
             <div>
@@ -720,7 +815,7 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("tournaments")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Tournaments", "Create, edit, and delete tournaments. Team, player, match, and score edits use the selected tournament.")}
           <div className="flex flex-wrap items-center gap-2">
@@ -801,7 +896,7 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("teams")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Teams", "Create, edit, and delete teams. Deleting a team also removes its players and matches.")}
           {teamForm.id ? (
@@ -892,7 +987,7 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("players")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Players", "Create, edit, and delete roster records with simple stat fields.")}
           {sportBadge(playerFormSport)}
@@ -981,9 +1076,9 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("reports")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          {sectionTitle("QR links", "Public match and court QR destinations for printing and sharing.")}
+          {sectionTitle("Reports", "Open printable match reports and public QR destinations for sharing.")}
           <Link href="/qr-print" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
             Printable QR page
           </Link>
@@ -1023,7 +1118,7 @@ export function AdminScoreForm() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("matches")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Matches", "Create, edit, and delete match records. Scores can also be edited here or in the score panel.")}
           {sportBadge(matchFormSport)}
@@ -1171,7 +1266,7 @@ export function AdminScoreForm() {
       </section>
 
       {selectedEventSport === "Football" ? (
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("timeline")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Live timeline", "Add football goals, cards, and substitutions for the selected tournament. Public match pages read these events live.")}
         </div>
@@ -1271,7 +1366,7 @@ export function AdminScoreForm() {
 
       {canScore ? (
       <>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("live_scoring")}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Scores", "Fast score update panel for live scoring.")}
           {sportBadge(selectedScoreSport)}
@@ -1387,7 +1482,7 @@ export function AdminScoreForm() {
         {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-400">No matches are available.</p> : null}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("match_stats")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Match team statistics", "Add professional match dashboard stats for the public match center.")}
           {selectedTeamStatsMatch ? sportBadge(selectedTeamStatsMatch.sport) : null}
@@ -1442,7 +1537,7 @@ export function AdminScoreForm() {
         </form>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("live_scoring")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Live player stats", "Update player totals and the match score from one panel.")}
           <div className="flex flex-wrap gap-2">
@@ -1529,7 +1624,7 @@ export function AdminScoreForm() {
       </>
       ) : null}
       {canManageAll ? (
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className={adminPanelClass("club_admins")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Club admins", "Assign an existing user to manage one team roster and branding.")}
         </div>
