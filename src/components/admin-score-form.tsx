@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -197,6 +197,7 @@ export function AdminScoreForm() {
   const [clubAdminEmail, setClubAdminEmail] = useState("");
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
+  const [clockPreviewNow, setClockPreviewNow] = useState(0);
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
   const courtOptions = useMemo(
@@ -239,6 +240,52 @@ export function AdminScoreForm() {
     : [];
   const eventPlayerOptions = data.players.filter((player) => !eventForm.teamId || player.teamId === eventForm.teamId);
   const matchEvents = data.events.filter((item) => !selectedEventMatch || item.matchId === selectedEventMatch.id);
+
+  useEffect(() => {
+    if (!selectedScoreMatch?.clockRunning) {
+      return;
+    }
+
+    const interval = window.setInterval(() => setClockPreviewNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [selectedScoreMatch?.id, selectedScoreMatch?.clockRunning, selectedScoreMatch?.clockStartedAt]);
+
+  function adminClockStatus(match?: Match) {
+    if (!match) {
+      return "Paused";
+    }
+
+    const period = match.periodLabel.toLowerCase();
+    const label = match.clockLabel?.toLowerCase().trim();
+
+    if (match.status === "Final" || period.includes("full") || period.includes("final") || label === "ft" || label === "full time") {
+      return "Full Time";
+    }
+
+    if (period.includes("half time") || label === "ht" || label === "half time" || label === "halftime") {
+      return "Half Time";
+    }
+
+    return match.clockRunning ? "Running" : "Paused";
+  }
+
+  function adminClockDisplay(match?: Match) {
+    if (!match) {
+      return "--:--";
+    }
+
+    const status = adminClockStatus(match);
+
+    if (match.sport === "Football" && status === "Half Time") {
+      return "HT";
+    }
+
+    if (match.sport === "Football" && status === "Full Time") {
+      return "90:00";
+    }
+
+    return formatMatchClock(match, match.clockRunning ? clockPreviewNow : 0);
+  }
 
   function submitTournament(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -546,21 +593,45 @@ export function AdminScoreForm() {
     setPlayerPhotoFile(null);
   }
 
-  function addLivePlayerStat(player: Player, statKey: PlayerStatKey) {
+  function adjustLivePlayerStat(player: Player, statKey: PlayerStatKey, amount: 1 | -1) {
     if (!selectedPlayerStatMatch) {
       return;
     }
 
-    savePlayerMatchStat(selectedPlayerStatMatch.id, player.id, statKey, 1);
-    setMessage(`Added ${playerStatLabels[statKey].toLowerCase()} for ${player.name}.`);
+    const currentValue = player.stats[statKey] ?? 0;
+    const isScoringStat = statKey === "goals" || statKey === "points";
+    const isHomePlayer = player.teamId === selectedPlayerStatMatch.homeTeamId;
+    const isAwayPlayer = player.teamId === selectedPlayerStatMatch.awayTeamId;
+    const teamScore = isHomePlayer ? selectedPlayerStatMatch.homeScore : isAwayPlayer ? selectedPlayerStatMatch.awayScore : 0;
+
+    if (amount < 0 && currentValue <= 0) {
+      setMessage(`${player.name} already has 0 ${playerStatLabels[statKey].toLowerCase()}.`);
+      return;
+    }
+
+    if (amount < 0 && isScoringStat && teamScore <= 0) {
+      setMessage("Team score is already 0, so this correction cannot be applied.");
+      return;
+    }
+
+    if (amount < 0 && isScoringStat) {
+      const confirmed = window.confirm(`Remove one ${statKey === "goals" ? "goal" : "point"} from ${player.name} and reduce the team score by 1?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    savePlayerMatchStat(selectedPlayerStatMatch.id, player.id, statKey, amount);
+    setMessage(`${amount > 0 ? "Added" : "Removed"} ${playerStatLabels[statKey].toLowerCase()} for ${player.name}.`);
   }
 
-  function liveButtonLabel(statKey: PlayerStatKey) {
-    if (statKey === "goals") return "+ Goal";
-    if (statKey === "points") return "+ Point";
-    if (statKey === "yellow_cards") return "+ Yellow card";
-    if (statKey === "red_cards") return "+ Red card";
-    return `+ ${playerStatLabels[statKey]}`;
+  function liveButtonLabel(statKey: PlayerStatKey, amount: 1 | -1) {
+    const prefix = amount > 0 ? "+" : "-";
+    if (statKey === "goals") return `${prefix} Goal`;
+    if (statKey === "points") return `${prefix} Point`;
+    if (statKey === "yellow_cards") return `${prefix} Yellow card`;
+    if (statKey === "red_cards") return `${prefix} Red card`;
+    return `${prefix} ${playerStatLabels[statKey]}`;
   }
 
   function editMatch(match: Match) {
@@ -1236,6 +1307,25 @@ export function AdminScoreForm() {
               <option value="Final">Final</option>
             </select>
           </label>
+          <div className="md:col-span-5">
+            <div className="grid gap-3 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-[0_12px_30px_rgba(37,99,235,0.10)] sm:grid-cols-[1fr_auto] sm:items-center">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Live clock preview</p>
+                <p className="mt-1 break-words text-sm font-semibold text-slate-500">
+                  {selectedScoreMatch
+                    ? `${data.teams.find((team) => team.id === selectedScoreMatch.homeTeamId)?.name ?? "Home"} vs ${data.teams.find((team) => team.id === selectedScoreMatch.awayTeamId)?.name ?? "Away"}`
+                    : "Select a match"}
+                </p>
+              </div>
+              <div className="rounded-xl bg-blue-700 px-5 py-4 text-center text-white shadow-lg shadow-blue-900/20">
+                <div className="flex items-center justify-center gap-2">
+                  {selectedScoreMatch?.clockRunning ? <span className="h-3 w-3 animate-pulse rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.95)]" aria-hidden="true" /> : null}
+                  <span className="text-4xl font-black leading-none tracking-tight sm:text-5xl">{adminClockDisplay(selectedScoreMatch)}</span>
+                </div>
+                <p className="mt-2 text-xs font-black uppercase tracking-[0.22em] text-white/70">{adminClockStatus(selectedScoreMatch)}</p>
+              </div>
+            </div>
+          </div>
           <label className="md:col-span-2">
             <span className={labelClass()}>Period label</span>
             <select name="periodLabel" defaultValue={selectedScoreMatch?.periodLabel ?? scorePeriodOptions[0]} className={inputClass()}>
@@ -1407,14 +1497,23 @@ export function AdminScoreForm() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {selectedPlayerQuickStats.map((stat) => (
-                            <button
-                              key={stat}
-                              type="button"
-                              onClick={() => addLivePlayerStat(player, stat)}
-                              className="rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-                            >
-                              {liveButtonLabel(stat)}
-                            </button>
+                            <div key={stat} className="flex overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => adjustLivePlayerStat(player, stat, 1)}
+                                className="px-3 py-1.5 text-sm font-bold text-blue-700 hover:bg-blue-50"
+                              >
+                                {liveButtonLabel(stat, 1)}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => adjustLivePlayerStat(player, stat, -1)}
+                                disabled={(player.stats[stat] ?? 0) <= 0}
+                                className="border-l border-blue-100 px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                              >
+                                {liveButtonLabel(stat, -1)}
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>

@@ -44,7 +44,17 @@ function formatFootballClock(match: Match, seconds: number) {
   if (phase.includes("half time")) return "Halftime";
   if (phase.includes("full") || phase.includes("final") || match.status === "Final") return "90:00";
 
-  return formatSeconds(Math.min(seconds, 90 * 60));
+  if (seconds >= 90 * 60) {
+    const stoppageMinute = Math.max(1, Math.floor((seconds - 90 * 60) / 60) + 1);
+    return `90+${stoppageMinute}`;
+  }
+
+  if (seconds >= 45 * 60 && !phase.includes("second")) {
+    const stoppageMinute = Math.max(1, Math.floor((seconds - 45 * 60) / 60) + 1);
+    return `45+${stoppageMinute}`;
+  }
+
+  return formatSeconds(seconds);
 }
 
 function footballStartSeconds(match: Match) {

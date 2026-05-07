@@ -174,29 +174,53 @@ function GoalScorerList({ events, players, align = "left" }: { events: MatchEven
 
 function EventIcon({ type }: { type: MatchEventType }) {
   if (type === "yellow" || type === "red") {
-    return <span className={clsx("mt-1 h-6 w-4 rounded-sm shadow-sm", type === "yellow" ? "bg-yellow-300" : "bg-red-600")} aria-hidden="true" />;
+    return (
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm" aria-hidden="true">
+        <span className={clsx("h-6 w-4 rounded-sm shadow-sm", type === "yellow" ? "bg-yellow-300" : "bg-red-600")} />
+      </span>
+    );
   }
 
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100" aria-hidden="true">
+    <span
+      className={clsx(
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-base font-black shadow-sm",
+        type === "goal" ? "border-blue-600 bg-blue-600 text-white" : "border-blue-100 bg-blue-50 text-blue-700"
+      )}
+      aria-hidden="true"
+    >
       {eventIcons[type]}
     </span>
   );
 }
 
 function TimelineEventCard({ event, team, player }: { event: MatchEvent; team?: Team | null; player?: Player | null }) {
+  const isGoal = event.type === "goal";
+
   return (
-    <article className="grid grid-cols-[auto_1fr] gap-3 rounded-lg border border-blue-100 bg-white px-3 py-3 shadow-[0_10px_28px_rgba(37,99,235,0.08)] sm:grid-cols-[auto_auto_1fr] sm:px-4">
-      <span className="rounded-lg bg-blue-600 px-2.5 py-1 text-sm font-black text-white shadow-sm">{event.minute}</span>
+    <article
+      className={clsx(
+        "grid grid-cols-[auto_1fr] gap-3 rounded-lg border bg-white px-4 py-4 shadow-[0_14px_32px_rgba(15,23,42,0.10)] ring-1 ring-white print:border-slate-400 print:bg-white print:shadow-none sm:grid-cols-[auto_auto_1fr]",
+        isGoal ? "border-blue-300 border-l-4 shadow-[0_16px_36px_rgba(37,99,235,0.16)]" : "border-slate-200"
+      )}
+    >
+      <span
+        className={clsx(
+          "inline-flex h-10 min-w-14 items-center justify-center rounded-lg px-3 text-sm font-black shadow-sm print:border print:bg-white",
+          isGoal ? "bg-blue-700 text-white print:border-blue-700 print:text-blue-700" : "bg-blue-600 text-white print:border-blue-700 print:text-blue-700"
+        )}
+      >
+        {event.minute}
+      </span>
       <EventIcon type={event.type} />
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="text-sm font-black text-slate-950">{eventLabels[event.type]}</p>
-          {team ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{team.name}</span> : null}
+          <p className={clsx("text-sm font-black", isGoal ? "text-blue-800" : "text-slate-950")}>{eventLabels[event.type]}</p>
+          {team ? <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 print:border-slate-300 print:bg-white">{team.name}</span> : null}
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-2">
           {player ? <PlayerAvatar player={player} size="h-8 w-8" /> : null}
-          <p className="min-w-0 break-words text-sm font-medium leading-6 text-slate-600">
+          <p className="min-w-0 break-words text-sm font-semibold leading-6 text-slate-700">
             {[player?.name, event.description].filter(Boolean).join(" - ") || "Match event"}
           </p>
         </div>
