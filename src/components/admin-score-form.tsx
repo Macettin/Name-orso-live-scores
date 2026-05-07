@@ -125,24 +125,24 @@ const periodOptionsBySport: Record<Sport, string[]> = {
 };
 
 function labelClass() {
-  return "text-sm font-semibold text-slate-600";
+  return "text-sm font-bold text-slate-700";
 }
 
 function inputClass() {
-  return "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
+  return "orso-input mt-2";
 }
 
 function sectionTitle(title: string, description: string) {
   return (
-    <div>
-      <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-      <p className="mt-1 text-sm text-slate-400">{description}</p>
+    <div className="min-w-0">
+      <h2 className="text-lg font-black tracking-tight text-slate-950">{title}</h2>
+      <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-slate-500">{description}</p>
     </div>
   );
 }
 
 function sportBadge(sport: Sport) {
-  return <span className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">{sport} mode</span>;
+  return <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700 ring-1 ring-blue-100">{sport} mode</span>;
 }
 
 function periodOptionsForSport(sport: Sport, current?: string) {

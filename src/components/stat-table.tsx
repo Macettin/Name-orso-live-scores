@@ -42,9 +42,9 @@ export function PlayerStatTable({ players, teams }: { players: Player[]; teams: 
   ) as PlayerStatKey[];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div className="orso-card overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3">Player</th>
             <th className="px-4 py-3">Team</th>
@@ -60,19 +60,19 @@ export function PlayerStatTable({ players, teams }: { players: Player[]; teams: 
           {players.map((player) => {
             const team = getTeam(lookupData, player.teamId);
             return (
-              <tr key={player.id}>
+              <tr key={player.id} className="transition hover:bg-blue-50/40">
                 <td className="px-4 py-3 font-semibold text-slate-900">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-56 items-center gap-3">
                     <PlayerAvatar player={player} />
-                    <span>
+                    <span className="break-words">
                       #{player.number} {player.name}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{team?.name}</td>
+                <td className="px-4 py-3 font-semibold text-slate-600">{team?.name}</td>
                 <td className="px-4 py-3 text-slate-600">{player.position}</td>
                 {visibleStats.map((stat) => (
-                  <td key={stat} className="px-4 py-3 text-right">
+                  <td key={stat} className="px-4 py-3 text-right font-bold text-slate-800">
                     {team && (playerStatsBySport[team.sport] as readonly PlayerStatKey[]).includes(stat) ? player.stats[stat] : "-"}
                   </td>
                 ))}

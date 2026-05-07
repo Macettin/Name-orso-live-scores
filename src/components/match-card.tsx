@@ -49,30 +49,25 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
   }
 
   return (
-    <Card className="flex flex-col gap-5 border-slate-200/90 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] transition hover:border-blue-200 hover:shadow-[0_18px_42px_rgba(37,99,235,0.12)]">
-      <div className="flex items-start justify-between gap-4">
+    <Card className="flex flex-col gap-4 border-slate-200/90 transition hover:border-blue-200 hover:shadow-[0_18px_42px_rgba(37,99,235,0.12)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
             {match.sport} - {match.group}
           </p>
-          <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+          <p className="mt-2 flex flex-wrap items-center gap-1.5 text-sm font-semibold text-slate-500">
             <MapPin size={15} aria-hidden="true" />
             {match.court} - {match.date} - {match.time}
           </p>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          {isFootball && match.status === "Live" ? (
-            <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-white shadow-sm shadow-red-900/20">
-              Live
-            </span>
-          ) : null}
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <StatusPill status={match.status} />
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
         <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-3 text-base font-bold text-slate-900 hover:text-blue-700">
           <TeamLogo team={home} size="h-10 w-10" />
-          <span className="truncate">{home.name}</span>
+          <span className="min-w-0 break-words leading-tight sm:truncate">{home.name}</span>
         </Link>
         <Link
           href={`/matches/${match.id}`}
@@ -84,12 +79,12 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           {match.homeScore} - {match.awayScore}
         </Link>
         <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center justify-end gap-3 text-right text-base font-bold text-slate-900 hover:text-blue-700">
-          <span className="truncate">{away.name}</span>
+          <span className="min-w-0 break-words leading-tight sm:truncate">{away.name}</span>
           <TeamLogo team={away} size="h-10 w-10" />
         </Link>
       </div>
       {match.youtubeUrl ? <YouTubeEmbed url={match.youtubeUrl} title={`${home.name} vs ${away.name} livestream`} /> : null}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600">
+      <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
         {isFootball && footballTime ? (
           <div className="flex flex-wrap items-center gap-2">
             {footballTime.minute ? (
@@ -100,7 +95,7 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         ) : (
           <span className="font-semibold text-slate-600">{match.periodLabel}</span>
         )}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-x-3 gap-y-2">
           <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/matches/${match.id}`}>
             Match QR
           </Link>

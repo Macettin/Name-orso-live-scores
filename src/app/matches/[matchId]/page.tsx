@@ -105,10 +105,10 @@ function PlayerAvatar({ player, size = "h-10 w-10" }: { player?: Player | null; 
 
 function Panel({ title, eyebrow, children, className }: { title: string; eyebrow?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={clsx("overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_16px_42px_rgba(37,99,235,0.09)]", className)}>
-      <div className="border-b border-blue-50 px-4 py-4 sm:px-5">
+    <section className={clsx("orso-card overflow-hidden", className)}>
+      <div className="orso-section-header">
         {eyebrow ? <p className="text-xs font-black uppercase tracking-wide text-blue-600">{eyebrow}</p> : null}
-        <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">{title}</h2>
+        <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950 sm:text-xl">{title}</h2>
       </div>
       <div className="p-4 sm:p-5">{children}</div>
     </section>
@@ -543,23 +543,23 @@ export default function MatchPage() {
             <ScoreTeamCard label="Away" team={away} events={awayGoalEvents} players={awayPlayers} align="right" />
           </div>
 
-          <div className="mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-2">
-            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
-              <p className="text-xs uppercase tracking-wide text-white/45">Match time</p>
-              <p className="mt-1 text-base font-black text-white sm:text-lg">{match.date} {match.time}</p>
-            </div>
-            <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
-              <p className="text-xs uppercase tracking-wide text-white/45">Venue</p>
-              <p className="mt-1 break-words text-base font-black text-white sm:text-lg">{matchVenueLabel}</p>
-            </div>
-          </div>
+      <div className="mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-2">
+        <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
+          <p className="text-xs uppercase tracking-wide text-white/45">Match time</p>
+          <p className="mt-1 text-base font-black text-white sm:text-lg">{match.date} {match.time}</p>
+        </div>
+        <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
+          <p className="text-xs uppercase tracking-wide text-white/45">Court / Hall</p>
+          <p className="mt-1 break-words text-base font-black text-white sm:text-lg">{matchVenueLabel}</p>
+        </div>
+      </div>
         </div>
       </section>
 
       <MatchStatisticsPanel data={data} match={match} home={home} away={away} />
       <TopPerformers data={data} match={match} players={matchPlayers} />
 
-      <nav className="sticky top-20 z-10 overflow-x-auto rounded-lg border border-blue-100 bg-white/95 p-1 shadow-[0_12px_34px_rgba(37,99,235,0.10)] backdrop-blur">
+      <nav className="orso-tabbar sticky top-20 z-10 backdrop-blur">
         <div className="grid min-w-max grid-cols-4 gap-1 sm:min-w-0">
           {matchTabs.map((tab) => (
             <button
@@ -567,8 +567,8 @@ export default function MatchPage() {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                "rounded-md px-4 py-2.5 text-sm font-black transition",
-                activeTab === tab.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                "orso-tab",
+                activeTab === tab.id ? "orso-tab-active" : "orso-tab-inactive"
               )}
             >
               {tab.label}
@@ -631,8 +631,6 @@ export default function MatchPage() {
             {[
               ["Sport", match.sport],
               ["Group", match.group],
-              ["Status", matchStatusLabel],
-              ["Venue", matchVenueLabel],
               ["Date", match.date],
               ["Time", match.time]
             ].map(([label, value]) => (

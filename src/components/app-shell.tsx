@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, MessageCircle, Shield, Users } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, MessageCircle, Shield, Trophy, Users } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 const navItems = [
+  { href: "/tournaments", label: "Tournaments", icon: Trophy },
   { href: "/fixtures", label: "Fixtures", icon: CalendarDays },
   { href: "/live", label: "Live", icon: Activity },
   { href: "/standings", label: "Standings", icon: BarChart3 },
@@ -21,9 +23,11 @@ const socialItems = [
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { data, profile, selectedTournamentId, setSelectedTournamentId } = useTournamentData();
   const visibleNavItems =
     profile?.role === "club_admin" ? [...navItems, { href: "/club-admin", label: "Club Admin", icon: Shield }] : navItems;
+  const showFooter = !pathname.startsWith("/admin") && !pathname.startsWith("/club-admin") && pathname !== "/login";
 
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden">
@@ -109,6 +113,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="mx-auto min-w-0 max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">{children}</main>
+      {showFooter ? (
+        <footer className="border-t border-blue-100 bg-white">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-3 py-5 text-center sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:text-left">
+            <p className="text-sm font-semibold text-slate-600">
+              Powered &amp; Developed by{" "}
+              <a href="https://www.orsosportsevents.com" target="_blank" rel="noopener noreferrer" className="font-black text-blue-700 transition hover:text-blue-800">
+                Orso Sports Events
+              </a>
+            </p>
+            <p className="text-xs font-semibold text-slate-400">Live scoring &amp; tournament management platform</p>
+          </div>
+        </footer>
+      ) : null}
     </div>
   );
 }

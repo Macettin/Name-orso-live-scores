@@ -43,9 +43,9 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
   const standings = buildStandings(data);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
+    <div className="orso-card overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3">#</th>
             <th className="px-4 py-3">Team</th>
@@ -63,14 +63,14 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
           {standings.map((row, index) => {
             const team = getTeam(data, row.teamId);
             return (
-              <tr key={row.teamId}>
+              <tr key={row.teamId} className="transition hover:bg-blue-50/40">
                 <td className="px-4 py-3">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100">
                     {index + 1}
                   </span>
                 </td>
                 <td className="px-4 py-3 font-semibold text-slate-900">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-56 items-center gap-3">
                     <TeamLogo team={team} size="h-9 w-9" />
                     <span className="break-words">{team?.name}</span>
                   </div>
@@ -110,7 +110,7 @@ function Leaderboard({ data, type }: { data: TournamentData; type: "scoring" | "
   return (
     <div className="grid gap-3">
       {rows.map((row, index) => (
-        <div key={row.player.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:grid-cols-[auto_1fr_auto] sm:items-center">
+        <div key={row.player.id} className="orso-card grid gap-3 p-4 transition hover:border-blue-200 hover:bg-blue-50/30 sm:grid-cols-[auto_1fr_auto] sm:items-center">
           <div className="flex items-center gap-3">
             <span className={clsx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-black", index < 3 ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700")}>
               {index + 1}
@@ -143,7 +143,7 @@ export default function StandingsPage() {
     <>
       <PageHeader title="Group standings" description="Tournament tables and player leaderboards for the selected tournament." action={<LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />} />
 
-      <nav className="mb-5 overflow-x-auto rounded-lg border border-blue-100 bg-white p-1 shadow-[0_12px_34px_rgba(37,99,235,0.08)]">
+      <nav className="orso-tabbar mb-5">
         <div className="grid min-w-max grid-cols-3 gap-1 sm:min-w-0">
           {tabs.map((tab) => (
             <button
@@ -151,8 +151,8 @@ export default function StandingsPage() {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                "rounded-md px-4 py-2.5 text-sm font-black transition",
-                activeTab === tab.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                "orso-tab",
+                activeTab === tab.id ? "orso-tab-active" : "orso-tab-inactive"
               )}
             >
               {tab.label}

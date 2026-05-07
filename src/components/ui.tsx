@@ -13,11 +13,11 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-      <div>
-        {eyebrow ? <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-700">{eyebrow}</p> : null}
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{title}</h1>
-        {description ? <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">{description}</p> : null}
+    <div className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 md:flex-row md:items-end">
+      <div className="min-w-0">
+        {eyebrow ? <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-blue-700">{eyebrow}</p> : null}
+        <h1 className="break-words text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
+        {description ? <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-slate-600 sm:text-base sm:leading-7">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -32,7 +32,7 @@ export function TournamentBrand({ tournament }: { tournament?: Tournament }) {
   const accent = tournament.primaryColor || "#2563eb";
 
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+    <div className="orso-card-soft mb-6 flex flex-wrap items-center justify-between gap-4 px-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
         {tournament.logoUrl ? (
           <span className="h-12 w-12 shrink-0 rounded-lg bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
@@ -89,7 +89,7 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={clsx("rounded-lg border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.07)]", className)}>
+    <section className={clsx("orso-card p-4 sm:p-5", className)}>
       {children}
     </section>
   );
