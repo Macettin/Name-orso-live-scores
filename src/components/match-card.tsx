@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { clsx } from "clsx";
 import { getTeam } from "@/lib/data-store";
@@ -43,6 +44,24 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
   const away = getTeam(lookupData, match.awayTeamId);
   const isFootball = match.sport === "Football";
   const footballTime = isFootball ? getFootballMatchTime(match) : null;
+  const previousScore = useRef({ home: match.homeScore, away: match.awayScore });
+  const [highlightTeam, setHighlightTeam] = useState<"home" | "away" | null>(null);
+
+  useEffect(() => {
+    const previous = previousScore.current;
+    const homeChanged = match.homeScore > previous.home;
+    const awayChanged = match.awayScore > previous.away;
+
+    previousScore.current = { home: match.homeScore, away: match.awayScore };
+
+    if (!homeChanged && !awayChanged) {
+      return;
+    }
+
+    setHighlightTeam(homeChanged ? "home" : "away");
+    const timeout = window.setTimeout(() => setHighlightTeam(null), 1100);
+    return () => window.clearTimeout(timeout);
+  }, [match.homeScore, match.awayScore]);
 
   if (!home || !away) {
     return null;
@@ -65,7 +84,13 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         </div>
       </div>
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-4">
-        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:bg-transparent sm:px-0 sm:py-0 sm:gap-3 sm:text-base">
+        <Link
+          href={`/teams/${home.id}`}
+          className={clsx(
+            "flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:bg-transparent sm:px-0 sm:py-0 sm:gap-3 sm:text-base",
+            highlightTeam === "home" && "orso-goal-flash"
+          )}
+        >
           <TeamLogo team={home} size="h-9 w-9 sm:h-10 sm:w-10" />
           <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{home.name}</span>
         </Link>
@@ -73,12 +98,19 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           href={`/matches/${match.id}`}
           className={clsx(
             "mx-auto w-full max-w-52 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-center font-black leading-none !text-white shadow-md shadow-blue-900/25 ring-1 ring-blue-500/20 hover:from-blue-700 hover:to-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 sm:w-auto sm:max-w-none",
-            isFootball ? "px-6 py-3 text-4xl sm:min-w-32 sm:text-3xl" : "px-5 py-3 text-3xl sm:min-w-28 sm:text-2xl"
+            isFootball ? "px-6 py-3 text-4xl sm:min-w-32 sm:text-3xl" : "px-5 py-3 text-3xl sm:min-w-28 sm:text-2xl",
+            highlightTeam && "orso-highlight"
           )}
         >
           {match.homeScore} - {match.awayScore}
         </Link>
-        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:justify-end sm:bg-transparent sm:px-0 sm:py-0 sm:text-right sm:gap-3 sm:text-base">
+        <Link
+          href={`/teams/${away.id}`}
+          className={clsx(
+            "flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:justify-end sm:bg-transparent sm:px-0 sm:py-0 sm:text-right sm:gap-3 sm:text-base",
+            highlightTeam === "away" && "orso-goal-flash"
+          )}
+        >
           <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{away.name}</span>
           <TeamLogo team={away} size="h-9 w-9 sm:h-10 sm:w-10" />
         </Link>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, MessageCircle, Shield, Trophy, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, Home, MessageCircle, Shield, Trophy, Users } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 const navItems = [
@@ -20,6 +20,14 @@ const socialItems = [
   { href: "https://wa.me/905427857750", label: "WhatsApp", icon: MessageCircle },
   { href: "https://www.facebook.com/p/Orso-Sports-Events-61564303367247/", label: "Facebook", text: "f" },
   { href: "https://www.instagram.com/orsosportsevents/", label: "Instagram", icon: Camera }
+];
+
+const mobileNavItems = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/live", label: "Live", icon: Activity },
+  { href: "/fixtures", label: "Fixtures", icon: CalendarDays },
+  { href: "/standings", label: "Standings", icon: BarChart3 },
+  { href: "/admin", label: "Admin", icon: ClipboardPenLine }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -112,9 +120,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto min-w-0 max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">{children}</main>
+      <main className="mx-auto min-w-0 max-w-7xl px-3 pb-28 pt-5 sm:px-6 sm:py-8 lg:px-8">{children}</main>
       {showFooter ? (
-        <footer className="border-t border-blue-100 bg-white">
+        <footer className="border-t border-blue-100 bg-white pb-24 sm:pb-0">
           <div className="mx-auto flex max-w-7xl flex-col gap-2 px-3 py-5 text-center sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:text-left">
             <p className="text-sm font-semibold text-slate-600">
               Powered &amp; Developed by{" "}
@@ -126,6 +134,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       ) : null}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-blue-100 bg-white/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_34px_rgba(15,23,42,0.10)] backdrop-blur sm:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+          {mobileNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-black transition ${
+                  active ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+                }`}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span className="truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

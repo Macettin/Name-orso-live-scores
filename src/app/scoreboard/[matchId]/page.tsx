@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
@@ -125,6 +126,8 @@ export default function ScoreboardPage() {
   const params = useParams<{ matchId: string }>();
   const { data, lastUpdatedAt } = useTournamentData();
   const [now, setNow] = useState<number | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const scoreboardRef = useRef<HTMLDivElement>(null);
   const match = data.matches.find((item) => item.id === params.matchId);
 
   useEffect(() => {
@@ -135,6 +138,24 @@ export default function ScoreboardPage() {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [match?.clockRunning, match?.sport, match?.clockStartedAt]);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await scoreboardRef.current?.requestFullscreen();
+  }
 
   if (!match) {
     return (
@@ -163,7 +184,7 @@ export default function ScoreboardPage() {
   const venueLabel = match.hallSlug && match.hallSlug !== match.court && !match.hallSlug.includes("-") ? `${match.court} / ${match.hallSlug}` : match.court;
 
   return (
-    <div className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-[radial-gradient(circle_at_top,#1d4ed8_0%,#0f172a_42%,#020617_100%)] px-4 py-4 text-white sm:px-8 sm:py-6 lg:px-12">
+    <div ref={scoreboardRef} className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-[radial-gradient(circle_at_top,#1d4ed8_0%,#0f172a_42%,#020617_100%)] px-4 py-4 text-white sm:px-8 sm:py-6 lg:px-12">
       <header className="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <BrandMark tournament={tournament} />
@@ -180,11 +201,19 @@ export default function ScoreboardPage() {
           </div>
           {match.clockRunning ? <p className="mt-2 text-sm font-black uppercase tracking-wide text-white/60">Live timer</p> : null}
         </div>
-        <div className="flex items-center justify-start gap-3 lg:justify-end">
+        <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
           <div className="flex items-center gap-3 rounded-xl bg-white/10 px-5 py-3">
             {match.status === "Live" ? <span className="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.9)]" /> : null}
             <span className="text-xl font-black uppercase tracking-wide">{statusLabel}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => void toggleFullscreen()}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-black text-white transition hover:bg-white/15"
+          >
+            {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          </button>
           <div className="hidden xl:block">
             <LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />
           </div>

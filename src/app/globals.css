@@ -229,6 +229,57 @@ textarea {
   overflow: hidden;
 }
 
+.orso-mobile-swipe {
+  display: grid;
+  gap: 1rem;
+}
+
+.orso-mobile-swipe-item {
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .orso-mobile-swipe {
+    display: grid;
+    grid-auto-columns: minmax(86%, 1fr);
+    grid-auto-flow: column;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin-inline: -0.75rem;
+    padding-inline: 0.75rem;
+    padding-bottom: 0.35rem;
+  }
+
+  .orso-mobile-swipe::-webkit-scrollbar {
+    display: none;
+  }
+
+  .orso-mobile-swipe-item {
+    scroll-snap-align: start;
+  }
+}
+
+@keyframes orso-goal-flash {
+  0% {
+    background-color: rgba(37, 99, 235, 0.2);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35);
+  }
+  45% {
+    background-color: rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.08);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+
+.orso-goal-flash {
+  animation: orso-goal-flash 1.1s ease-out;
+}
+
 @keyframes orso-pulse-highlight {
   0% {
     box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.42);

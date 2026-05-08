@@ -43,7 +43,43 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
   const standings = buildStandings(data);
 
   return (
-    <div className="orso-card overflow-x-auto">
+    <>
+    <div className="grid gap-3 sm:hidden">
+      {standings.map((row, index) => {
+        const team = getTeam(data, row.teamId);
+        return (
+          <article key={row.teamId} className="orso-card p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">{index + 1}</span>
+              <TeamLogo team={team} size="h-10 w-10" />
+              <div className="min-w-0 flex-1">
+                <h2 className="orso-team-name orso-team-name-2 text-base font-black leading-tight text-slate-950">{team?.name}</h2>
+                <p className="mt-1 text-xs font-bold text-slate-500">{team?.sport} / {team?.group}</p>
+              </div>
+              <div className="rounded-lg bg-blue-50 px-3 py-2 text-center">
+                <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">Pts</p>
+                <p className="text-xl font-black text-blue-700">{row.tournamentPoints}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs">
+              {[
+                ["P", row.played],
+                ["W", row.won],
+                ["L", row.lost],
+                ["For", row.pointsFor],
+                ["Ag", row.pointsAgainst]
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg bg-slate-50 px-2 py-2">
+                  <p className="font-black uppercase text-slate-400">{label}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900">{value}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+    <div className="orso-card hidden overflow-x-auto sm:block">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
         <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
           <tr>
@@ -89,6 +125,7 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

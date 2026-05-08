@@ -58,6 +58,53 @@ export function TournamentBrand({ tournament }: { tournament?: Tournament }) {
   );
 }
 
+export function TournamentCoverBanner({ tournament }: { tournament?: Tournament }) {
+  if (!tournament) {
+    return null;
+  }
+
+  const accent = tournament.primaryColor || "#2563eb";
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_20px_54px_rgba(37,99,235,0.12)]">
+      <div className="relative min-h-36 overflow-hidden px-5 py-6 text-white sm:px-7">
+        <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${accent}, #2563eb 48%, #0f172a)` }} />
+        {tournament.logoUrl ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-8 -top-10 h-44 w-44 bg-contain bg-center bg-no-repeat opacity-15 sm:h-56 sm:w-56"
+            style={{ backgroundImage: `url(${tournament.logoUrl})` }}
+          />
+        ) : null}
+        <div className="relative flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            {tournament.logoUrl ? (
+              <span className="h-14 w-14 shrink-0 rounded-lg bg-white/15 bg-contain bg-center bg-no-repeat p-2 ring-1 ring-white/20" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
+            ) : (
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-white/15 text-xl font-black ring-1 ring-white/20">
+                {tournament.name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">Tournament</p>
+              <h2 className="orso-team-name orso-team-name-2 mt-1 text-2xl font-black leading-tight sm:text-3xl">{tournament.name}</h2>
+              <p className="mt-1 text-sm font-bold text-white/70">{tournament.sportType} / {tournament.location || "Location TBA"}</p>
+            </div>
+          </div>
+          {tournament.sponsorName || tournament.sponsorLogoUrl ? (
+            <div className="flex w-fit max-w-full items-center gap-3 rounded-lg border border-white/15 bg-white/10 px-3 py-2 backdrop-blur">
+              {tournament.sponsorLogoUrl ? (
+                <span className="h-9 w-20 shrink-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
+              ) : null}
+              {tournament.sponsorName ? <span className="min-w-0 break-words text-sm font-black text-white">{tournament.sponsorName}</span> : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function initials(value: string) {
   const parts = value.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part[0]?.toUpperCase()).join("") || "T";

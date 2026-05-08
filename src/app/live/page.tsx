@@ -1,7 +1,7 @@
 "use client";
 
 import { MatchCard } from "@/components/match-card";
-import { PageHeader, TournamentBrand } from "@/components/ui";
+import { PageHeader, TournamentCoverBanner } from "@/components/ui";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 export default function LivePage() {
@@ -11,11 +11,13 @@ export default function LivePage() {
 
   return (
     <>
-      <TournamentBrand tournament={tournament} />
+      <TournamentCoverBanner tournament={tournament} />
       <PageHeader title="Live scores" description="Real-time match cards for matches currently in progress." />
-      <div className="grid gap-4">
+      <div className="orso-mobile-swipe sm:grid sm:gap-4">
         {liveMatches.map((match) => (
-          <MatchCard key={match.id} match={match} teams={data.teams} />
+          <div key={match.id} className="orso-mobile-swipe-item">
+            <MatchCard match={match} teams={data.teams} />
+          </div>
         ))}
       </div>
     </>

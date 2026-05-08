@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Activity, CalendarDays, FileText, ShieldCheck } from "lucide-react";
 import { MatchCard } from "@/components/match-card";
-import { Card } from "@/components/ui";
+import { Card, TournamentCoverBanner } from "@/components/ui";
 import { buildStandings } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
@@ -124,24 +124,29 @@ export default function Home() {
           </div>
         </Card>
       </div>
+      <TournamentCoverBanner tournament={tournament} />
       <section className="mt-8 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-black text-slate-900">Live now</h2>
             <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black uppercase text-red-700">{liveMatches.length} live</span>
           </div>
-          <div className="grid gap-4">
+          <div className="orso-mobile-swipe sm:grid sm:gap-4">
             {liveMatches.map((match) => (
-              <MatchCard key={match.id} match={match} teams={data.teams} />
+              <div key={match.id} className="orso-mobile-swipe-item">
+                <MatchCard match={match} teams={data.teams} />
+              </div>
             ))}
             {liveMatches.length === 0 ? <p className="rounded-lg border border-blue-100 bg-white px-4 py-5 text-sm font-semibold text-slate-500">No matches are live right now.</p> : null}
           </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
           <h2 className="mb-4 text-xl font-black text-slate-900">Coming up</h2>
-          <div className="grid gap-4">
+          <div className="orso-mobile-swipe sm:grid sm:gap-4">
             {nextFixtures.map((match) => (
-              <MatchCard key={match.id} match={match} teams={data.teams} />
+              <div key={match.id} className="orso-mobile-swipe-item">
+                <MatchCard match={match} teams={data.teams} />
+              </div>
             ))}
             {nextFixtures.length === 0 ? <p className="rounded-lg bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">No scheduled matches are available.</p> : null}
           </div>

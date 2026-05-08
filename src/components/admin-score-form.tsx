@@ -230,6 +230,7 @@ export function AdminScoreForm() {
   const [clockPreviewNow, setClockPreviewNow] = useState(0);
   const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
   const [adminDarkMode, setAdminDarkMode] = useState(() => (typeof window === "undefined" ? false : window.localStorage.getItem(adminDarkModeStorageKey) === "true"));
+  const [compactScorerMode, setCompactScorerMode] = useState(false);
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
   const courtOptions = useMemo(
@@ -262,6 +263,8 @@ export function AdminScoreForm() {
   const matchFormHomeTeam = data.teams.find((team) => team.id === (matchForm.homeTeamId || teamOptions[0]?.id));
   const matchFormSport = matchFormHomeTeam?.sport ?? selectedTournamentSport ?? "Volleyball";
   const selectedScoreSport = selectedScoreMatch?.sport ?? selectedTournamentSport ?? "Volleyball";
+  const selectedScoreHomeTeam = selectedScoreMatch ? data.teams.find((team) => team.id === selectedScoreMatch.homeTeamId) : undefined;
+  const selectedScoreAwayTeam = selectedScoreMatch ? data.teams.find((team) => team.id === selectedScoreMatch.awayTeamId) : undefined;
   const selectedTeamStatsTeams = selectedTeamStatsMatch
     ? data.teams.filter((team) => team.id === selectedTeamStatsMatch.homeTeamId || team.id === selectedTeamStatsMatch.awayTeamId)
     : [];
@@ -336,6 +339,22 @@ export function AdminScoreForm() {
     }
 
     return formatMatchClock(match, match.clockRunning ? clockPreviewNow : 0);
+  }
+
+  function scorerControlButtonClass(tone: "green" | "amber" | "blue" | "slate" | "primary") {
+    const tones = {
+      green: "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+      amber: "border-amber-200 text-amber-700 hover:bg-amber-50",
+      blue: "border-blue-200 text-blue-700 hover:bg-blue-50",
+      slate: "border-slate-300 text-slate-700 hover:bg-slate-50",
+      primary: "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+    };
+
+    return clsx(
+      "rounded-lg border px-3 py-2 text-sm font-semibold transition",
+      compactScorerMode && "min-h-12 px-4 py-3 text-base font-black",
+      tones[tone]
+    );
   }
 
   function submitTournament(event: React.FormEvent<HTMLFormElement>) {
@@ -1376,9 +1395,42 @@ export function AdminScoreForm() {
       <section className={adminPanelClass("live_scoring")}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Scores", "Fast score update panel for live scoring.")}
-          {sportBadge(selectedScoreSport)}
+          <div className="flex flex-wrap items-center gap-2">
+            {sportBadge(selectedScoreSport)}
+            <button
+              type="button"
+              onClick={() => setCompactScorerMode((current) => !current)}
+              aria-pressed={compactScorerMode}
+              className={clsx(
+                "rounded-lg border px-3 py-2 text-sm font-black transition",
+                compactScorerMode ? "border-blue-600 bg-blue-600 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              )}
+            >
+              {compactScorerMode ? "Tablet scorer mode on" : "Tablet scorer mode"}
+            </button>
+          </div>
         </div>
-        <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}-${selectedScoreMatch?.matchMinute ?? ""}-${selectedScoreMatch?.clockLabel ?? ""}-${selectedScoreMatch?.clockRunning ?? false}`} onSubmit={submitScore} className="mt-5 grid gap-4 md:grid-cols-5">
+        {selectedScoreMatch ? (
+          <div className="sticky top-2 z-20 mt-5 rounded-xl border border-blue-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(37,99,235,0.16)] backdrop-blur">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-600">Selected match</p>
+                <p className="orso-team-name orso-team-name-2 mt-1 text-base font-black text-slate-950">{selectedScoreHomeTeam?.name ?? "Home"} vs {selectedScoreAwayTeam?.name ?? "Away"}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{selectedScoreMatch.court} / {selectedScoreMatch.status}</p>
+              </div>
+              <div className="rounded-xl bg-blue-700 px-5 py-3 text-center text-white">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">Clock</p>
+                <p className="mt-1 text-4xl font-black leading-none">{adminClockDisplay(selectedScoreMatch)}</p>
+                <p className="mt-1 text-xs font-black uppercase tracking-wide text-white/70">{adminClockStatus(selectedScoreMatch)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-5 py-3 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Score</p>
+                <p className="mt-1 text-4xl font-black leading-none text-slate-950">{selectedScoreMatch.homeScore} - {selectedScoreMatch.awayScore}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        <form key={`${selectedScoreMatch?.id ?? "none"}-${selectedScoreMatch?.homeScore ?? 0}-${selectedScoreMatch?.awayScore ?? 0}-${selectedScoreMatch?.status ?? ""}-${selectedScoreMatch?.periodLabel ?? ""}-${selectedScoreMatch?.matchMinute ?? ""}-${selectedScoreMatch?.clockLabel ?? ""}-${selectedScoreMatch?.clockRunning ?? false}`} onSubmit={submitScore} className={clsx("mt-5 grid gap-4 md:grid-cols-5", compactScorerMode && "md:grid-cols-6")}>
           <label className="md:col-span-2">
             <span className={labelClass()}>Match</span>
             <select value={selectedScoreMatch?.id ?? ""} onChange={(event) => setSelectedScoreMatchId(event.target.value)} className={inputClass()}>
@@ -1463,24 +1515,24 @@ export function AdminScoreForm() {
             <span className={labelClass()}>Clock running</span>
           </label>
           <div className="flex flex-wrap items-end gap-2 md:col-span-3">
-            <button type="button" onClick={() => applyClockAction("start")} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+            <button type="button" onClick={() => applyClockAction("start")} className={scorerControlButtonClass("green")}>
               Start clock
             </button>
             {selectedScoreSport === "Football" ? (
-              <button type="button" onClick={startFootballSecondHalf} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50">
+              <button type="button" onClick={startFootballSecondHalf} className={scorerControlButtonClass("green")}>
                 Start second half
               </button>
             ) : null}
-            <button type="button" onClick={() => applyClockAction("pause")} className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50">
+            <button type="button" onClick={() => applyClockAction("pause")} className={scorerControlButtonClass("amber")}>
               Pause clock
             </button>
-            <button type="button" onClick={() => applyClockAction("resume")} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+            <button type="button" onClick={() => applyClockAction("resume")} className={scorerControlButtonClass("blue")}>
               Resume clock
             </button>
-            <button type="button" onClick={() => applyClockAction("reset")} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button type="button" onClick={() => applyClockAction("reset")} className={scorerControlButtonClass("slate")}>
               Reset clock
             </button>
-            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            <button className={clsx("flex items-center gap-2", scorerControlButtonClass("primary"))}>
               <Save size={16} aria-hidden="true" />
               Save score
             </button>
@@ -1557,6 +1609,26 @@ export function AdminScoreForm() {
             ) : null}
           </div>
         </div>
+        {selectedPlayerStatMatch ? (
+          <div className="sticky top-2 z-20 mb-5 rounded-xl border border-blue-200 bg-white/95 p-3 shadow-[0_14px_34px_rgba(37,99,235,0.16)] backdrop-blur">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-600">Scoring match</p>
+                <p className="orso-team-name orso-team-name-2 mt-1 text-base font-black text-slate-950">{selectedPlayerStatMatchTeams[0]?.name ?? "Home"} vs {selectedPlayerStatMatchTeams[1]?.name ?? "Away"}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{selectedPlayerStatMatch.court} / {selectedPlayerStatMatch.status}</p>
+              </div>
+              <div className="rounded-xl bg-blue-700 px-5 py-3 text-center text-white">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">Clock</p>
+                <p className="mt-1 text-4xl font-black leading-none">{adminClockDisplay(selectedPlayerStatMatch)}</p>
+                <p className="mt-1 text-xs font-black uppercase tracking-wide text-white/70">{adminClockStatus(selectedPlayerStatMatch)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-5 py-3 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Score</p>
+                <p className="mt-1 text-4xl font-black leading-none text-slate-950">{selectedPlayerStatMatch.homeScore} - {selectedPlayerStatMatch.awayScore}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <label className="block max-w-xl">
           <span className={labelClass()}>Match</span>
           <select value={selectedPlayerStatMatch?.id ?? ""} onChange={(event) => setSelectedPlayerStatMatchId(event.target.value)} className={inputClass()}>
@@ -1572,7 +1644,7 @@ export function AdminScoreForm() {
           </select>
         </label>
         {selectedPlayerStatMatch ? (
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <div className={clsx("mt-5 grid gap-3", compactScorerMode ? "lg:grid-cols-2" : "md:grid-cols-2")}>
             {selectedPlayerStatMatchTeams.map((team) => (
               <div key={team.id} className="rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1603,7 +1675,7 @@ export function AdminScoreForm() {
                               <button
                                 type="button"
                                 onClick={() => adjustLivePlayerStat(player, stat, 1)}
-                                className="px-3 py-1.5 text-sm font-bold text-blue-700 hover:bg-blue-50"
+                                className={clsx("px-3 py-1.5 text-sm font-bold text-blue-700 hover:bg-blue-50", compactScorerMode && "min-h-12 px-4 py-3 text-base font-black")}
                               >
                                 {liveButtonLabel(stat, 1)}
                               </button>
@@ -1611,7 +1683,7 @@ export function AdminScoreForm() {
                                 type="button"
                                 onClick={() => adjustLivePlayerStat(player, stat, -1)}
                                 disabled={(player.stats[stat] ?? 0) <= 0}
-                                className="border-l border-blue-100 px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                                className={clsx("border-l border-blue-100 px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300", compactScorerMode && "min-h-12 px-4 py-3 text-base font-black")}
                               >
                                 {liveButtonLabel(stat, -1)}
                               </button>
