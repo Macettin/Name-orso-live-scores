@@ -87,10 +87,10 @@ function GoalScorers({ events, players, align = "left" }: { events: MatchEvent[]
 }
 
 function teamNameClass(name: string) {
-  if (name.length > 36) return "text-base sm:text-lg lg:text-2xl";
-  if (name.length > 30) return "text-lg sm:text-xl lg:text-3xl";
-  if (name.length > 22) return "text-xl sm:text-2xl lg:text-4xl";
-  return "text-2xl sm:text-4xl lg:text-5xl";
+  if (name.length > 38) return "text-xl lg:text-2xl 2xl:text-3xl";
+  if (name.length > 28) return "text-2xl lg:text-3xl 2xl:text-4xl";
+  if (name.length > 20) return "text-3xl lg:text-4xl 2xl:text-5xl";
+  return "text-4xl lg:text-5xl 2xl:text-6xl";
 }
 
 function TeamPanel({
@@ -109,9 +109,9 @@ function TeamPanel({
   align?: "left" | "right";
 }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)] backdrop-blur sm:p-6">
-      <div className={`flex min-w-0 flex-col gap-4 ${align === "right" ? "items-end text-right" : "items-start text-left"}`}>
-        <p className="rounded-full bg-white/10 px-3 py-1 text-sm font-black uppercase tracking-wide text-white/55">{label}</p>
+    <div className="flex h-full min-h-56 min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)] backdrop-blur sm:min-h-72 sm:p-6 lg:min-h-[24rem]">
+      <div className={`flex min-w-0 flex-1 flex-col gap-4 ${align === "right" ? "items-end text-right" : "items-start text-left"}`}>
+        <p className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-white/55 sm:text-sm">{label}</p>
         <div className={`flex w-full min-w-0 flex-row items-center gap-3 sm:gap-4 ${align === "right" ? "sm:flex-row-reverse" : ""}`}>
           {logo}
           <p className={`orso-team-name orso-team-name-2 min-w-0 flex-1 font-black leading-tight tracking-tight ${teamNameClass(name)}`}>{name}</p>
@@ -184,27 +184,27 @@ export default function ScoreboardPage() {
   const venueLabel = match.hallSlug && match.hallSlug !== match.court && !match.hallSlug.includes("-") ? `${match.court} / ${match.hallSlug}` : match.court;
 
   return (
-    <div ref={scoreboardRef} className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-[radial-gradient(circle_at_top,#1d4ed8_0%,#0f172a_42%,#020617_100%)] px-4 py-4 text-white sm:px-8 sm:py-6 lg:px-12">
-      <header className="grid shrink-0 gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+    <div ref={scoreboardRef} className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-[radial-gradient(circle_at_top,#1d4ed8_0%,#0f172a_42%,#020617_100%)] px-4 py-4 text-white sm:px-8 sm:py-5 lg:px-10 2xl:px-14">
+      <header className="grid shrink-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <BrandMark tournament={tournament} />
           <div className="min-w-0">
-            <p className="whitespace-normal break-words text-2xl font-black leading-tight sm:text-4xl">{tournament?.name || "Tournament"}</p>
-            <p className="mt-1 text-lg font-bold text-white/60">{match.sport} / {match.group}</p>
+            <p className="whitespace-normal break-words text-xl font-black leading-tight sm:text-3xl">{tournament?.name || "Tournament"}</p>
+            <p className="mt-1 text-sm font-bold text-white/60 sm:text-base">{match.sport} / {match.group}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-4 text-center shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur">
-          <p className="text-sm font-black uppercase tracking-[0.25em] text-white/45">Clock</p>
+        <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-center shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur">
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-white/45">Clock</p>
           <div className="mt-2 flex items-center justify-center gap-3">
-            {match.clockRunning ? <span className="h-4 w-4 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.95)]" /> : null}
-            <span className="text-4xl font-black leading-none sm:text-6xl">{clock}</span>
+            {match.clockRunning ? <span className="h-3 w-3 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.95)]" /> : null}
+            <span className="text-3xl font-black leading-none sm:text-5xl">{clock}</span>
           </div>
-          {match.clockRunning ? <p className="mt-2 text-sm font-black uppercase tracking-wide text-white/60">Live timer</p> : null}
+          {match.clockRunning ? <p className="mt-1 text-xs font-black uppercase tracking-wide text-white/60">Live timer</p> : null}
         </div>
         <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
-          <div className="flex items-center gap-3 rounded-xl bg-white/10 px-5 py-3">
+          <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-2.5">
             {match.status === "Live" ? <span className="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.9)]" /> : null}
-            <span className="text-xl font-black uppercase tracking-wide">{statusLabel}</span>
+            <span className="text-base font-black uppercase tracking-wide sm:text-lg">{statusLabel}</span>
           </div>
           <button
             type="button"
@@ -220,12 +220,12 @@ export default function ScoreboardPage() {
         </div>
       </header>
 
-      <main className="grid flex-1 place-items-center py-5 sm:py-8">
-        <div className="grid w-full max-w-7xl items-center gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-6">
+      <main className="grid flex-1 content-center py-4 sm:py-5">
+        <div className="mx-auto grid w-full max-w-[96rem] items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)_minmax(0,1fr)] lg:gap-5 2xl:gap-7">
           <TeamPanel label="Home" name={home?.name || "Home"} logo={<TeamLogo team={home} size="h-20 w-20 sm:h-24 sm:w-24" className="text-2xl" />} goalEvents={homeGoalEvents} players={homePlayers} />
-          <div className="rounded-2xl border border-white/20 px-6 py-5 text-center shadow-[0_32px_90px_rgba(0,0,0,0.38)] ring-1 ring-white/15 sm:px-10 sm:py-7" style={{ backgroundColor: accent }}>
-            <p className="mb-2 text-sm font-black uppercase tracking-[0.28em] text-white/55">Score</p>
-            <div className="text-7xl font-black leading-none tracking-tight sm:text-8xl lg:text-[9rem]">
+          <div className="flex min-h-56 flex-col justify-center rounded-2xl border border-white/20 px-6 py-5 text-center shadow-[0_32px_90px_rgba(0,0,0,0.38)] ring-1 ring-white/15 sm:min-h-72 sm:px-8 sm:py-7 lg:min-h-[24rem]" style={{ backgroundColor: accent }}>
+            <p className="mb-3 text-sm font-black uppercase tracking-[0.28em] text-white/55">Score</p>
+            <div className="text-7xl font-black leading-none tracking-tight sm:text-8xl xl:text-[8rem] 2xl:text-[9rem]">
               <span>{match.homeScore}</span>
               <span className="px-3 text-white/45 sm:px-5">-</span>
               <span>{match.awayScore}</span>
@@ -235,7 +235,7 @@ export default function ScoreboardPage() {
         </div>
       </main>
 
-      <footer className="grid shrink-0 gap-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
+      <footer className="mx-auto grid w-full max-w-[96rem] shrink-0 gap-3 pb-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
         <div className="rounded-xl bg-white/10 px-5 py-3">
           <p className="text-sm font-bold uppercase tracking-wide text-white/45">Match time</p>
           <p className="mt-2 text-xl font-black">{match.date} / {match.time}</p>
