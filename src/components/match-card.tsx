@@ -64,21 +64,21 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           <StatusPill status={match.status} />
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(7.5rem,1fr)_auto_minmax(7.5rem,1fr)] items-center gap-2 overflow-x-auto pb-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 sm:overflow-visible sm:pb-0">
-        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:gap-3 sm:text-base">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-4">
+        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:bg-transparent sm:px-0 sm:py-0 sm:gap-3 sm:text-base">
           <TeamLogo team={home} size="h-9 w-9 sm:h-10 sm:w-10" />
           <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{home.name}</span>
         </Link>
         <Link
           href={`/matches/${match.id}`}
           className={clsx(
-            "rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-center font-black leading-none !text-white shadow-md shadow-blue-900/25 ring-1 ring-blue-500/20 hover:from-blue-700 hover:to-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
-            isFootball ? "px-6 py-3 text-3xl sm:min-w-32" : "px-5 py-3 text-2xl sm:min-w-28"
+            "mx-auto w-full max-w-52 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-center font-black leading-none !text-white shadow-md shadow-blue-900/25 ring-1 ring-blue-500/20 hover:from-blue-700 hover:to-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 sm:w-auto sm:max-w-none",
+            isFootball ? "px-6 py-3 text-4xl sm:min-w-32 sm:text-3xl" : "px-5 py-3 text-3xl sm:min-w-28 sm:text-2xl"
           )}
         >
           {match.homeScore} - {match.awayScore}
         </Link>
-        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center justify-end gap-2 text-right text-sm font-bold text-slate-900 hover:text-blue-700 sm:gap-3 sm:text-base">
+        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:justify-end sm:bg-transparent sm:px-0 sm:py-0 sm:text-right sm:gap-3 sm:text-base">
           <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{away.name}</span>
           <TeamLogo team={away} size="h-9 w-9 sm:h-10 sm:w-10" />
         </Link>
@@ -95,14 +95,14 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         ) : (
           <span className="font-semibold text-slate-600">{match.periodLabel}</span>
         )}
-        <div className="flex flex-wrap gap-x-3 gap-y-2">
-          <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/matches/${match.id}`}>
+        <div className="grid gap-2 sm:flex sm:flex-wrap sm:gap-x-3 sm:gap-y-2">
+          <Link className="rounded-lg bg-blue-50 px-3 py-2 text-center font-semibold text-blue-700 hover:text-blue-800 sm:bg-transparent sm:px-0 sm:py-0" href={`/matches/${match.id}`}>
             Match QR
           </Link>
-          <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/matches/${match.id}`}>
+          <Link className="rounded-lg bg-blue-50 px-3 py-2 text-center font-semibold text-blue-700 hover:text-blue-800 sm:bg-transparent sm:px-0 sm:py-0" href={`/matches/${match.id}`}>
             Report
           </Link>
-          <Link className="font-semibold text-blue-700 hover:text-blue-800" href={`/court/${match.hallSlug}`}>
+          <Link className="rounded-lg bg-blue-50 px-3 py-2 text-center font-semibold text-blue-700 hover:text-blue-800 sm:bg-transparent sm:px-0 sm:py-0" href={`/court/${match.hallSlug}`}>
             Court QR page
           </Link>
         </div>
