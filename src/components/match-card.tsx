@@ -64,10 +64,10 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
           <StatusPill status={match.status} />
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
-        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-3 text-base font-bold text-slate-900 hover:text-blue-700">
-          <TeamLogo team={home} size="h-10 w-10" />
-          <span className="min-w-0 break-words leading-tight sm:truncate">{home.name}</span>
+      <div className="grid grid-cols-[minmax(7.5rem,1fr)_auto_minmax(7.5rem,1fr)] items-center gap-2 overflow-x-auto pb-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 sm:overflow-visible sm:pb-0">
+        <Link href={`/teams/${home.id}`} className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-900 hover:text-blue-700 sm:gap-3 sm:text-base">
+          <TeamLogo team={home} size="h-9 w-9 sm:h-10 sm:w-10" />
+          <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{home.name}</span>
         </Link>
         <Link
           href={`/matches/${match.id}`}
@@ -78,9 +78,9 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
         >
           {match.homeScore} - {match.awayScore}
         </Link>
-        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center justify-end gap-3 text-right text-base font-bold text-slate-900 hover:text-blue-700">
-          <span className="min-w-0 break-words leading-tight sm:truncate">{away.name}</span>
-          <TeamLogo team={away} size="h-10 w-10" />
+        <Link href={`/teams/${away.id}`} className="flex min-w-0 items-center justify-end gap-2 text-right text-sm font-bold text-slate-900 hover:text-blue-700 sm:gap-3 sm:text-base">
+          <span className="orso-team-name orso-team-name-2 min-w-0 leading-tight sm:truncate">{away.name}</span>
+          <TeamLogo team={away} size="h-9 w-9 sm:h-10 sm:w-10" />
         </Link>
       </div>
       {match.youtubeUrl ? <YouTubeEmbed url={match.youtubeUrl} title={`${home.name} vs ${away.name} livestream`} /> : null}

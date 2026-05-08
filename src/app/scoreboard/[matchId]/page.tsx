@@ -86,9 +86,9 @@ function GoalScorers({ events, players, align = "left" }: { events: MatchEvent[]
 }
 
 function teamNameClass(name: string) {
-  if (name.length > 36) return "text-sm sm:text-lg lg:text-2xl";
-  if (name.length > 30) return "text-base sm:text-xl lg:text-3xl";
-  if (name.length > 22) return "text-lg sm:text-2xl lg:text-4xl";
+  if (name.length > 36) return "text-base sm:text-lg lg:text-2xl";
+  if (name.length > 30) return "text-lg sm:text-xl lg:text-3xl";
+  if (name.length > 22) return "text-xl sm:text-2xl lg:text-4xl";
   return "text-2xl sm:text-4xl lg:text-5xl";
 }
 
@@ -111,9 +111,9 @@ function TeamPanel({
     <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)] backdrop-blur sm:p-6">
       <div className={`flex min-w-0 flex-col gap-4 ${align === "right" ? "items-end text-right" : "items-start text-left"}`}>
         <p className="rounded-full bg-white/10 px-3 py-1 text-sm font-black uppercase tracking-wide text-white/55">{label}</p>
-        <div className={`flex w-full min-w-0 flex-col gap-4 sm:items-center ${align === "right" ? "sm:flex-row-reverse" : "sm:flex-row"}`}>
+        <div className={`flex w-full min-w-0 flex-row items-center gap-3 sm:gap-4 ${align === "right" ? "sm:flex-row-reverse" : ""}`}>
           {logo}
-          <p className={`min-w-0 flex-1 whitespace-nowrap font-black leading-tight tracking-tight ${teamNameClass(name)}`}>{name}</p>
+          <p className={`orso-team-name orso-team-name-2 min-w-0 flex-1 font-black leading-tight tracking-tight ${teamNameClass(name)}`}>{name}</p>
         </div>
         <GoalScorers events={goalEvents} players={players} align={align} />
       </div>

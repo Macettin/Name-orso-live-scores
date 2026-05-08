@@ -72,7 +72,7 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
                 <td className="px-4 py-3 font-semibold text-slate-900">
                   <div className="flex min-w-56 items-center gap-3">
                     <TeamLogo team={team} size="h-9 w-9" />
-                    <span className="break-words">{team?.name}</span>
+                    <span className="orso-team-name orso-team-name-2">{team?.name}</span>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{team?.sport}</td>
@@ -121,7 +121,7 @@ function Leaderboard({ data, type }: { data: TournamentData; type: "scoring" | "
             <p className="break-words text-base font-black text-slate-950">{row.player.name}</p>
             <div className="mt-1 flex min-w-0 items-center gap-2">
               <TeamLogo team={row.team} size="h-7 w-7" />
-              <p className="break-words text-sm font-semibold text-slate-500">{row.team?.name ?? "Team unavailable"}</p>
+              <p className="orso-team-name orso-team-name-2 text-sm font-semibold text-slate-500">{row.team?.name ?? "Team unavailable"}</p>
             </div>
           </div>
           <div className="rounded-lg bg-blue-50 px-4 py-3 text-left sm:text-right">

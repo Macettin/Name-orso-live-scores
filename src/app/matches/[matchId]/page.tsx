@@ -125,7 +125,7 @@ function TeamRoster({ team, players }: { team?: Team; players: Player[] }) {
       <div className="flex min-w-0 items-center gap-3 bg-blue-50 px-4 py-3">
         <TeamLogo team={team} size="h-12 w-12" />
         <div className="min-w-0">
-          <h3 className="break-words text-base font-black text-slate-950">{team.name}</h3>
+          <h3 className="orso-team-name orso-team-name-2 text-base font-black text-slate-950">{team.name}</h3>
           <p className="text-sm font-semibold text-blue-700">{players.length} players</p>
         </div>
       </div>
@@ -244,7 +244,7 @@ function TeamPlayerStats({ team, players }: { team?: Team; players: Player[] }) 
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center gap-3 bg-blue-50 px-4 py-3">
         <TeamLogo team={team} size="h-10 w-10" />
-        <h3 className="break-words font-black text-blue-950">{team.name}</h3>
+        <h3 className="orso-team-name orso-team-name-2 font-black text-blue-950">{team.name}</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100 text-sm">
@@ -307,11 +307,11 @@ function MatchStatisticsPanel({ data, match, home, away }: { data: TournamentDat
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-blue-50 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <TeamLogo team={home} size="h-9 w-9" />
-            <span className="break-words text-sm font-black text-blue-950">{home?.name ?? "Home"}</span>
+            <span className="orso-team-name orso-team-name-2 text-sm font-black text-blue-950">{home?.name ?? "Home"}</span>
           </div>
           <span className="text-xs font-black uppercase tracking-wide text-blue-500">Stats</span>
           <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-            <span className="break-words text-sm font-black text-blue-950">{away?.name ?? "Away"}</span>
+            <span className="orso-team-name orso-team-name-2 text-sm font-black text-blue-950">{away?.name ?? "Away"}</span>
             <TeamLogo team={away} size="h-9 w-9" />
           </div>
         </div>
@@ -355,7 +355,7 @@ function TopPerformerCard({ title, stat, player, team, value }: { title: string;
             <p className="break-words text-base font-black text-slate-950">{player.name}</p>
             <div className="mt-1 flex min-w-0 items-center gap-2">
               <TeamLogo team={team} size="h-6 w-6" />
-              <p className="break-words text-sm font-semibold text-slate-500">{team?.name ?? "Team"}</p>
+              <p className="orso-team-name orso-team-name-2 text-sm font-semibold text-slate-500">{team?.name ?? "Team"}</p>
             </div>
           </div>
           <div className="rounded-lg bg-blue-50 px-3 py-2 text-right">
@@ -439,7 +439,7 @@ function ScoreTeamCard({
         <TeamLogo team={team} size="h-14 w-14 sm:h-16 sm:w-16" />
         <div className={clsx("min-w-0", align === "right" ? "md:order-first" : "")}>
           <p className="text-xs font-black uppercase tracking-wide text-white/55">{label}</p>
-          <p className="mt-1 break-words text-2xl font-black leading-tight text-white sm:text-3xl">{team?.name ?? label}</p>
+          <p className="orso-team-name orso-team-name-2 mt-1 text-2xl font-black leading-tight text-white sm:text-3xl">{team?.name ?? label}</p>
         </div>
       </div>
       <GoalScorerList events={events} players={players} align={align} />

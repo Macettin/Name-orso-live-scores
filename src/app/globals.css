@@ -214,6 +214,21 @@ textarea {
   }
 }
 
+.orso-team-name {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-wrap: balance;
+}
+
+.orso-team-name-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 @keyframes orso-pulse-highlight {
   0% {
     box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.42);
