@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
@@ -15,6 +15,8 @@ import {
   tournamentSportOptions,
   type Match,
   type MatchEvent,
+  type MatchLineupEntry,
+  type MatchLineupRole,
   type MatchTeamStatKey,
   type MatchEventType,
   type MatchStatus,
@@ -35,6 +37,7 @@ type PlayerForm = {
   number: number;
   teamId: string;
   position: string;
+  squadRole: MatchLineupRole;
   photoUrl: string;
   points: number;
   goals: number;
@@ -52,6 +55,13 @@ type MatchForm = Pick<
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
+type SubstitutionForm = {
+  matchId: string;
+  teamId: string;
+  playerOutId: string;
+  playerInId: string;
+  minute: string;
+};
 
 const emptyTournament: TournamentForm = {
   id: "",
@@ -80,6 +90,7 @@ const emptyPlayer: PlayerForm = {
   number: 0,
   teamId: "",
   position: "",
+  squadRole: "reserve",
   photoUrl: "",
   points: 0,
   goals: 0,
@@ -119,6 +130,14 @@ const emptyEvent: EventForm = {
   description: ""
 };
 
+const emptySubstitution: SubstitutionForm = {
+  matchId: "",
+  teamId: "",
+  playerOutId: "",
+  playerInId: "",
+  minute: ""
+};
+
 const periodOptionsBySport: Record<Sport, string[]> = {
   Football: ["First Half", "Half Time", "Second Half", "Full Time"],
   Basketball: ["Q1", "Q2", "Half Time", "Q3", "Q4", "Final"],
@@ -131,6 +150,7 @@ type AdminSection =
   | "teams"
   | "players"
   | "matches"
+  | "lineups"
   | "live_scoring"
   | "timeline"
   | "match_stats"
@@ -144,6 +164,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
+  { id: "lineups", label: "Lineups", scorer: true },
   { id: "live_scoring", label: "Live Scoring", scorer: true },
   { id: "timeline", label: "Timeline Events", adminOnly: true },
   { id: "match_stats", label: "Match Stats", scorer: true },
@@ -153,6 +174,55 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
 ];
 
 const adminDarkModeStorageKey = "orso-admin-dark-mode";
+const lineupFormations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3"] as const;
+type LineupFormation = (typeof lineupFormations)[number];
+type LineupPosition = { x: number; y: number };
+
+function clampPercent(value: number) {
+  return Math.max(7, Math.min(93, value));
+}
+
+function spreadLine(count: number, y: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    x: count === 1 ? 50 : 18 + (index * 64) / (count - 1),
+    y
+  }));
+}
+
+function formationShape(formation: string) {
+  const known: Record<string, number[]> = {
+    "4-3-3": [1, 4, 3, 3],
+    "4-4-2": [1, 4, 4, 2],
+    "3-5-2": [1, 3, 5, 2],
+    "4-2-3-1": [1, 4, 2, 3, 1],
+    "3-4-3": [1, 3, 4, 3]
+  };
+  return known[formation] ?? known["4-3-3"];
+}
+
+function formationPositions(formation: string) {
+  const shape = formationShape(formation);
+  const yByLine = shape.length === 5 ? [88, 70, 56, 38, 20] : [88, 68, 46, 22];
+  return shape.flatMap((count, index) => spreadLine(count, yByLine[index] ?? 50)).slice(0, 11);
+}
+
+function autoArrangePositions(players: Player[], roles: Record<string, MatchLineupRole>, formation: string, existing: Record<string, LineupPosition>) {
+  const starters = players.filter((player) => roles[player.id] === "starting");
+  const preset = formationPositions(formation);
+  const next = { ...existing };
+
+  starters.slice(0, 11).forEach((player, index) => {
+    next[player.id] = preset[index] ?? { x: 50, y: 50 };
+  });
+
+  return next;
+}
+
+function roleRank(role: MatchLineupRole) {
+  if (role === "starting") return 0;
+  if (role === "substitute") return 1;
+  return 2;
+}
 
 function labelClass() {
   return "text-sm font-bold text-slate-700";
@@ -180,6 +250,131 @@ function periodOptionsForSport(sport: Sport, current?: string) {
   return current && !options.includes(current) ? [current, ...options] : options;
 }
 
+function LineupPitchEditor({
+  players,
+  roles,
+  positions,
+  selectedPlayerId,
+  swapPlayerId,
+  onSelectPlayer,
+  onMovePlayer,
+  onSwapPlayers
+}: {
+  players: Player[];
+  roles: Record<string, MatchLineupRole>;
+  positions: Record<string, LineupPosition>;
+  selectedPlayerId: string;
+  swapPlayerId: string;
+  onSelectPlayer: (playerId: string) => void;
+  onMovePlayer: (playerId: string, position: LineupPosition) => void;
+  onSwapPlayers: (firstPlayerId: string, secondPlayerId: string) => void;
+}) {
+  const pitchRef = useRef<HTMLDivElement | null>(null);
+  const [draggingPlayerId, setDraggingPlayerId] = useState("");
+  const activePlayers = players
+    .filter((player) => roles[player.id] === "starting" && positions[player.id])
+    .sort((first, second) => (positions[first.id]?.y ?? 0) - (positions[second.id]?.y ?? 0));
+
+  function positionFromPointer(event: React.PointerEvent | React.MouseEvent | React.DragEvent) {
+    const rect = pitchRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    return {
+      x: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+      y: clampPercent(((event.clientY - rect.top) / rect.height) * 100)
+    };
+  }
+
+  function placeSelected(event: React.PointerEvent<HTMLDivElement>) {
+    if (!selectedPlayerId || draggingPlayerId) return;
+    const position = positionFromPointer(event);
+    if (position) onMovePlayer(selectedPlayerId, position);
+  }
+
+  function moveDragged(event: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingPlayerId) return;
+    const position = positionFromPointer(event);
+    if (position) onMovePlayer(draggingPlayerId, position);
+  }
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-white p-3 shadow-[0_18px_42px_rgba(5,150,105,0.10)]">
+      <div
+        ref={pitchRef}
+        onPointerDown={placeSelected}
+        onPointerMove={moveDragged}
+        onPointerUp={() => setDraggingPlayerId("")}
+        onPointerCancel={() => setDraggingPlayerId("")}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          const playerId = event.dataTransfer.getData("text/plain");
+          const position = positionFromPointer(event);
+          if (playerId && position) onMovePlayer(playerId, position);
+        }}
+        className="relative mx-auto aspect-[68/105] min-h-[34rem] max-h-[48rem] w-full touch-none overflow-hidden rounded-lg border border-emerald-900/20 bg-emerald-700 text-white sm:aspect-[68/96]"
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.07)_0_12.5%,rgba(255,255,255,0.02)_12.5%_25%,rgba(255,255,255,0.07)_25%_37.5%,rgba(255,255,255,0.02)_37.5%_50%,rgba(255,255,255,0.07)_50%_62.5%,rgba(255,255,255,0.02)_62.5%_75%,rgba(255,255,255,0.07)_75%_87.5%,rgba(255,255,255,0.02)_87.5%_100%),linear-gradient(180deg,#167a3a,#0f6f39_48%,#0b5f34)]" />
+        <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(rgba(255,255,255,0.18)_0.7px,transparent_0.7px)] [background-size:9px_9px]" />
+        <div className="absolute inset-[4%] rounded-sm border-2 border-white/55" />
+        <div className="absolute left-[4%] right-[4%] top-1/2 h-0.5 -translate-y-1/2 bg-white/55" />
+        <div className="absolute left-1/2 top-1/2 h-[18%] w-[28%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/55" />
+        <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" />
+        <div className="absolute left-1/2 top-[4%] h-[15%] w-[50%] -translate-x-1/2 border-x-2 border-b-2 border-white/55" />
+        <div className="absolute left-1/2 top-[4%] h-[7%] w-[23%] -translate-x-1/2 border-x-2 border-b-2 border-white/55" />
+        <div className="absolute left-1/2 top-[2.2%] h-[2.2%] w-[18%] -translate-x-1/2 rounded-t-sm border-x-2 border-t-2 border-white/55" />
+        <div className="absolute bottom-[4%] left-1/2 h-[15%] w-[50%] -translate-x-1/2 border-x-2 border-t-2 border-white/55" />
+        <div className="absolute bottom-[4%] left-1/2 h-[7%] w-[23%] -translate-x-1/2 border-x-2 border-t-2 border-white/55" />
+        <div className="absolute bottom-[2.2%] left-1/2 h-[2.2%] w-[18%] -translate-x-1/2 rounded-b-sm border-x-2 border-b-2 border-white/55" />
+
+        {activePlayers.map((player) => {
+          const position = positions[player.id];
+          return (
+            <button
+              key={player.id}
+              type="button"
+              draggable
+              onDragStart={(event) => event.dataTransfer.setData("text/plain", player.id)}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelectPlayer(player.id);
+                setDraggingPlayerId(player.id);
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (swapPlayerId && swapPlayerId !== player.id) {
+                  onSwapPlayers(swapPlayerId, player.id);
+                } else {
+                  onSelectPlayer(player.id);
+                }
+              }}
+              className={clsx(
+                "absolute z-[2] w-[5.2rem] -translate-x-1/2 -translate-y-1/2 touch-none text-center transition",
+                selectedPlayerId === player.id && "scale-105",
+                swapPlayerId === player.id && "scale-105"
+              )}
+              style={{ left: `${position.x}%`, top: `${position.y}%` }}
+            >
+              <span className={clsx("mx-auto flex h-10 w-10 items-center justify-center rounded-full shadow-[0_8px_22px_rgba(15,23,42,0.28)] ring-2", selectedPlayerId === player.id ? "bg-blue-600 ring-white" : "bg-white ring-blue-500/75")}>
+                <span className={clsx("text-sm font-black", selectedPlayerId === player.id ? "text-white" : "text-blue-700")}>{player.number || "P"}</span>
+              </span>
+              <span className="mt-1 block truncate rounded-full border border-white/15 bg-slate-950/60 px-2 py-1 text-[0.66rem] font-black leading-tight text-white shadow-sm backdrop-blur">
+                {player.name}
+              </span>
+            </button>
+          );
+        })}
+
+        {activePlayers.length === 0 ? (
+          <div className="absolute inset-0 z-[2] flex items-center justify-center p-6 text-center">
+            <p className="rounded-lg border border-white/20 bg-black/25 px-4 py-3 text-sm font-black text-white/85 backdrop-blur">Set starters, then choose a formation or place players manually.</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function AdminScoreForm() {
   const {
     data,
@@ -204,6 +399,7 @@ export function AdminScoreForm() {
     saveScore,
     savePlayerMatchStat,
     saveMatchTeamStats,
+    saveMatchLineups,
     saveEvent,
     removeEvent,
     assignClubAdmin,
@@ -223,7 +419,10 @@ export function AdminScoreForm() {
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedTeamStatsMatchId, setSelectedTeamStatsMatchId] = useState(() => data.matches[0]?.id ?? "");
+  const [selectedLineupMatchId, setSelectedLineupMatchId] = useState(() => data.matches[0]?.id ?? "");
+  const [selectedLineupTeamId, setSelectedLineupTeamId] = useState("");
   const [eventForm, setEventForm] = useState<EventForm>(() => ({ ...emptyEvent, matchId: data.matches[0]?.id ?? "" }));
+  const [substitutionForm, setSubstitutionForm] = useState<SubstitutionForm>(() => ({ ...emptySubstitution, matchId: data.matches[0]?.id ?? "" }));
   const [clubAdminEmail, setClubAdminEmail] = useState("");
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
@@ -231,6 +430,11 @@ export function AdminScoreForm() {
   const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
   const [adminDarkMode, setAdminDarkMode] = useState(() => (typeof window === "undefined" ? false : window.localStorage.getItem(adminDarkModeStorageKey) === "true"));
   const [compactScorerMode, setCompactScorerMode] = useState(false);
+  const [lineupFormation, setLineupFormation] = useState<LineupFormation>("4-3-3");
+  const [lineupRoles, setLineupRoles] = useState<Record<string, MatchLineupRole>>({});
+  const [lineupPositions, setLineupPositions] = useState<Record<string, LineupPosition>>({});
+  const [selectedPitchPlayerId, setSelectedPitchPlayerId] = useState("");
+  const [swapPlayerId, setSwapPlayerId] = useState("");
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
   const courtOptions = useMemo(
@@ -246,6 +450,17 @@ export function AdminScoreForm() {
   const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
   const selectedPlayerStatMatch = data.matches.find((match) => match.id === selectedPlayerStatMatchId) ?? data.matches[0];
   const selectedTeamStatsMatch = data.matches.find((match) => match.id === selectedTeamStatsMatchId) ?? data.matches[0];
+  const selectedLineupMatch = data.matches.find((match) => match.id === selectedLineupMatchId) ?? data.matches[0];
+  const selectedLineupTeamOptions = selectedLineupMatch
+    ? data.teams.filter((team) => team.id === selectedLineupMatch.homeTeamId || team.id === selectedLineupMatch.awayTeamId)
+    : [];
+  const selectedLineupTeam = selectedLineupTeamOptions.find((team) => team.id === selectedLineupTeamId) ?? selectedLineupTeamOptions[0];
+  const selectedLineupPlayers = selectedLineupTeam ? data.players.filter((player) => player.teamId === selectedLineupTeam.id) : [];
+  const selectedLineupEntries = selectedLineupMatch && selectedLineupTeam
+    ? data.matchLineups.filter((entry) => entry.matchId === selectedLineupMatch.id && entry.teamId === selectedLineupTeam.id)
+    : [];
+  const selectedLineupPlayerKey = selectedLineupPlayers.map((player) => player.id).join(":");
+  const selectedLineupEntryKey = selectedLineupEntries.map((entry) => `${entry.playerId}:${entry.role}:${entry.x ?? ""}:${entry.y ?? ""}:${entry.formation ?? ""}`).join("|");
   const selectedPlayerStatMatchTeams = selectedPlayerStatMatch
     ? data.teams.filter((team) => team.id === selectedPlayerStatMatch.homeTeamId || team.id === selectedPlayerStatMatch.awayTeamId)
     : [];
@@ -275,6 +490,16 @@ export function AdminScoreForm() {
     : [];
   const eventPlayerOptions = data.players.filter((player) => !eventForm.teamId || player.teamId === eventForm.teamId);
   const matchEvents = data.events.filter((item) => !selectedEventMatch || item.matchId === selectedEventMatch.id);
+  const selectedSubstitutionMatch = data.matches.find((match) => match.id === substitutionForm.matchId) ?? selectedScoreMatch ?? data.matches[0];
+  const substitutionTeamOptions = selectedSubstitutionMatch
+    ? data.teams.filter((team) => team.id === selectedSubstitutionMatch.homeTeamId || team.id === selectedSubstitutionMatch.awayTeamId)
+    : [];
+  const selectedSubstitutionTeam = substitutionTeamOptions.find((team) => team.id === substitutionForm.teamId) ?? substitutionTeamOptions[0];
+  const substitutionPlayers = selectedSubstitutionTeam ? data.players.filter((player) => player.teamId === selectedSubstitutionTeam.id) : [];
+  const substitutionCount = selectedSubstitutionMatch && selectedSubstitutionTeam
+    ? data.events.filter((event) => event.matchId === selectedSubstitutionMatch.id && event.teamId === selectedSubstitutionTeam.id && event.type === "substitution").length
+    : 0;
+  const substitutionLimitReached = selectedSubstitutionMatch?.sport === "Football" && substitutionCount >= 5;
   const visibleAdminSections = adminSections.filter((section) => (section.adminOnly ? canManageAll : true) && (section.scorer ? canScore : true));
 
   function adminPanelClass(section: AdminSection, tone: "default" | "blue" = "default") {
@@ -303,6 +528,29 @@ export function AdminScoreForm() {
     const interval = window.setInterval(() => setClockPreviewNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [selectedScoreMatch?.id, selectedScoreMatch?.clockRunning, selectedScoreMatch?.clockStartedAt]);
+
+  useEffect(() => {
+    const nextFormation = (selectedLineupEntries.find((entry) => entry.formation)?.formation ?? "4-3-3") as LineupFormation;
+    const nextRoles = Object.fromEntries(selectedLineupPlayers.map((player) => [player.id, selectedLineupEntries.find((entry) => entry.playerId === player.id)?.role ?? "reserve"])) as Record<string, MatchLineupRole>;
+    const presetPositions = autoArrangePositions(selectedLineupPlayers, nextRoles, nextFormation, {});
+    const nextPositions = { ...presetPositions };
+
+    selectedLineupEntries.forEach((entry) => {
+      if (typeof entry.x === "number" && typeof entry.y === "number") {
+        nextPositions[entry.playerId] = { x: clampPercent(entry.x), y: clampPercent(entry.y) };
+      }
+    });
+
+    queueMicrotask(() => {
+      setLineupFormation(lineupFormations.includes(nextFormation) ? nextFormation : "4-3-3");
+      setLineupRoles(nextRoles);
+      setLineupPositions(nextPositions);
+      setSelectedPitchPlayerId("");
+      setSwapPlayerId("");
+    });
+    // selectedLineupPlayerKey and selectedLineupEntryKey intentionally carry the array contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLineupMatch?.id, selectedLineupTeam?.id, selectedLineupPlayerKey, selectedLineupEntryKey]);
 
   function adminClockStatus(match?: Match) {
     if (!match) {
@@ -446,6 +694,19 @@ export function AdminScoreForm() {
       }
     };
     await savePlayer(player);
+    if (selectedLineupMatch && (selectedLineupMatch.homeTeamId === teamId || selectedLineupMatch.awayTeamId === teamId)) {
+      const existingTeamEntries = data.matchLineups.filter((entry) => entry.matchId === selectedLineupMatch.id && entry.teamId === teamId && entry.playerId !== playerId);
+      await saveMatchLineups([
+        ...existingTeamEntries,
+        {
+          tournamentId: selectedLineupMatch.tournamentId ?? selectedTournamentId,
+          matchId: selectedLineupMatch.id,
+          teamId,
+          playerId,
+          role: playerForm.squadRole
+        }
+      ]);
+    }
     setPlayerForm({ ...emptyPlayer, teamId: teamOptions[0]?.id ?? "" });
     setPlayerPhotoFile(null);
     setMessage(`Saved player: ${player.name}`);
@@ -535,6 +796,119 @@ export function AdminScoreForm() {
     });
 
     setMessage(`Saved match statistics for ${selectedTeamStatsMatch.court}.`);
+  }
+
+  function lineupRoleForPlayer(playerId: string): MatchLineupRole {
+    return lineupRoles[playerId] ?? selectedLineupEntries.find((entry) => entry.playerId === playerId)?.role ?? "reserve";
+  }
+
+  function lineupRoleLabel(role: MatchLineupRole) {
+    if (role === "starting") return "Starting XI";
+    if (role === "substitute") return "Substitute";
+    return "Reserve / Not in squad";
+  }
+
+  function setLineupRole(playerId: string, role: MatchLineupRole) {
+    setLineupRoles((current) => ({ ...current, [playerId]: role }));
+    if (role === "starting") {
+      setSelectedPitchPlayerId(playerId);
+      setLineupPositions((current) => current[playerId] ? current : autoArrangePositions(selectedLineupPlayers, { ...lineupRoles, [playerId]: role }, lineupFormation, current));
+    }
+  }
+
+  function applyFormationPreset(formation: LineupFormation) {
+    setLineupFormation(formation);
+    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, formation, current));
+  }
+
+  function autoArrangeLineup() {
+    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, current));
+  }
+
+  function moveLineupPlayer(playerId: string, position: LineupPosition) {
+    setLineupPositions((current) => ({ ...current, [playerId]: { x: clampPercent(position.x), y: clampPercent(position.y) } }));
+    setSelectedPitchPlayerId(playerId);
+  }
+
+  function swapLineupPlayers(firstPlayerId: string, secondPlayerId: string) {
+    const first = lineupPositions[firstPlayerId];
+    const second = lineupPositions[secondPlayerId];
+    if (!first || !second) return;
+    setLineupPositions((current) => ({ ...current, [firstPlayerId]: second, [secondPlayerId]: first }));
+    setSwapPlayerId("");
+    setSelectedPitchPlayerId(secondPlayerId);
+  }
+
+  function resetLineupToFormation() {
+    setLineupPositions(autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, {}));
+    setSelectedPitchPlayerId("");
+    setSwapPlayerId("");
+  }
+
+  function submitMatchLineups(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedLineupMatch || !selectedLineupTeam) {
+      return;
+    }
+
+    const entries = selectedLineupPlayers.map((player) => ({
+      tournamentId: selectedLineupMatch.tournamentId ?? selectedTournamentId,
+      matchId: selectedLineupMatch.id,
+      teamId: selectedLineupTeam.id,
+      playerId: player.id,
+      role: lineupRoleForPlayer(player.id),
+      x: lineupPositions[player.id]?.x,
+      y: lineupPositions[player.id]?.y,
+      formation: lineupFormation
+    }));
+    const startingCount = entries.filter((entry) => entry.role === "starting").length;
+
+    if (startingCount > 11) {
+      setMessage("Starting XI cannot contain more than 11 players.");
+      return;
+    }
+
+    saveMatchLineups(entries);
+    setMessage(`Saved lineup roles for ${selectedLineupTeam.name}: ${startingCount} starters.`);
+  }
+
+  function submitSubstitution(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedSubstitutionMatch || !selectedSubstitutionTeam || !substitutionForm.minute.trim() || !substitutionForm.playerOutId || !substitutionForm.playerInId) {
+      setMessage("Select match, team, player out, player in, and minute for the substitution.");
+      return;
+    }
+
+    if (substitutionForm.playerOutId === substitutionForm.playerInId) {
+      setMessage("Player out and player in must be different.");
+      return;
+    }
+
+    if (selectedSubstitutionMatch.sport === "Football" && substitutionCount >= 5) {
+      setMessage(`${selectedSubstitutionTeam.name} already used 5 substitutions.`);
+      return;
+    }
+
+    const playerOut = data.players.find((player) => player.id === substitutionForm.playerOutId);
+    const playerIn = data.players.find((player) => player.id === substitutionForm.playerInId);
+    const matchEvent: MatchEvent = {
+      id: createId("event", `${selectedSubstitutionMatch.id}-substitution-${substitutionForm.minute}`),
+      tournamentId: selectedSubstitutionMatch.tournamentId ?? selectedTournamentId,
+      matchId: selectedSubstitutionMatch.id,
+      teamId: selectedSubstitutionTeam.id,
+      playerId: substitutionForm.playerOutId,
+      playerOutId: substitutionForm.playerOutId,
+      playerInId: substitutionForm.playerInId,
+      type: "substitution",
+      minute: substitutionForm.minute.trim(),
+      description: `${playerIn?.name ?? "Player in"} replaces ${playerOut?.name ?? "Player out"}`
+    };
+
+    saveEvent(matchEvent);
+    setSubstitutionForm({ ...emptySubstitution, matchId: selectedSubstitutionMatch.id, teamId: selectedSubstitutionTeam.id });
+    setMessage(`Saved substitution for ${selectedSubstitutionTeam.name}: ${matchEvent.description}.`);
   }
 
   function applyClockAction(action: "start" | "pause" | "resume" | "reset") {
@@ -649,6 +1023,7 @@ export function AdminScoreForm() {
       number: player.number,
       teamId: player.teamId,
       position: player.position,
+      squadRole: selectedLineupEntries.find((entry) => entry.playerId === player.id)?.role ?? "reserve",
       photoUrl: player.photoUrl ?? "",
       points: baseStats.points,
       goals: baseStats.goals,
@@ -1053,6 +1428,29 @@ export function AdminScoreForm() {
             <span className={labelClass()}>Position</span>
             <input value={playerForm.position} onChange={(event) => setPlayerForm({ ...playerForm, position: event.target.value })} className={inputClass()} />
           </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Match for squad role</span>
+            <select value={selectedLineupMatch?.id ?? ""} onChange={(event) => setSelectedLineupMatchId(event.target.value)} className={inputClass()}>
+              {data.matches.map((match) => {
+                const home = data.teams.find((team) => team.id === match.homeTeamId);
+                const away = data.teams.find((team) => team.id === match.awayTeamId);
+                return (
+                  <option key={match.id} value={match.id}>
+                    {home?.name} vs {away?.name} - {match.court}
+                  </option>
+                );
+              })}
+            </select>
+            <span className="mt-1 block text-xs font-semibold text-slate-400">Saved per selected match when the player belongs to either match team.</span>
+          </label>
+          <label>
+            <span className={labelClass()}>Squad role</span>
+            <select value={playerForm.squadRole} onChange={(event) => setPlayerForm({ ...playerForm, squadRole: event.target.value as MatchLineupRole })} className={inputClass()}>
+              <option value="starting">Starting XI</option>
+              <option value="substitute">Substitute</option>
+              <option value="reserve">Reserve / Not in squad</option>
+            </select>
+          </label>
           <label>
             <span className={labelClass()}>Photo</span>
             <input
@@ -1291,6 +1689,122 @@ export function AdminScoreForm() {
         </div>
       </section>
 
+      <section className={adminPanelClass("lineups")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Match lineup management", "Set match-day Starting XI, substitutes, and reserves per football fixture. These roles power the public Lineups tab.")}
+          {selectedLineupMatch ? sportBadge(selectedLineupMatch.sport) : null}
+        </div>
+        <form onSubmit={submitMatchLineups} className="grid gap-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label>
+              <span className={labelClass()}>Match</span>
+              <select value={selectedLineupMatch?.id ?? ""} onChange={(event) => setSelectedLineupMatchId(event.target.value)} className={inputClass()}>
+                {data.matches.map((match) => {
+                  const home = data.teams.find((team) => team.id === match.homeTeamId);
+                  const away = data.teams.find((team) => team.id === match.awayTeamId);
+                  return (
+                    <option key={match.id} value={match.id}>
+                      {home?.name} vs {away?.name} - {match.court}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label>
+              <span className={labelClass()}>Team</span>
+              <select value={selectedLineupTeam?.id ?? ""} onChange={(event) => setSelectedLineupTeamId(event.target.value)} className={inputClass()}>
+                {selectedLineupTeamOptions.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {selectedLineupMatch?.sport === "Football" && selectedLineupTeam ? (
+            <>
+              <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 sm:grid-cols-3">
+                {(["starting", "substitute", "reserve"] as MatchLineupRole[]).map((role) => (
+                  <div key={role} className="rounded-lg bg-white px-3 py-2">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">{lineupRoleLabel(role)}</p>
+                    <p className="mt-1 text-2xl font-black text-blue-700">
+                      {selectedLineupPlayers.filter((player) => lineupRoleForPlayer(player.id) === role).length}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+                <div className="grid gap-3">
+                  <div className="flex flex-wrap items-end gap-3 rounded-xl border border-blue-100 bg-white p-3">
+                    <label className="min-w-44 flex-1">
+                      <span className={labelClass()}>Formation preset</span>
+                      <select value={lineupFormation} onChange={(event) => applyFormationPreset(event.target.value as LineupFormation)} className={inputClass()}>
+                        {lineupFormations.map((formation) => (
+                          <option key={formation} value={formation}>{formation}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="button" onClick={resetLineupToFormation} className="min-h-11 rounded-lg border border-blue-200 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                      Reset to formation
+                    </button>
+                    <button type="button" onClick={autoArrangeLineup} className="min-h-11 rounded-lg border border-blue-200 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                      Auto arrange
+                    </button>
+                    <button type="button" onClick={() => setSwapPlayerId(selectedPitchPlayerId)} disabled={!selectedPitchPlayerId} className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45">
+                      Swap players
+                    </button>
+                  </div>
+
+                  <LineupPitchEditor
+                    players={selectedLineupPlayers}
+                    roles={lineupRoles}
+                    positions={lineupPositions}
+                    selectedPlayerId={selectedPitchPlayerId}
+                    swapPlayerId={swapPlayerId}
+                    onSelectPlayer={setSelectedPitchPlayerId}
+                    onMovePlayer={moveLineupPlayer}
+                    onSwapPlayers={swapLineupPlayers}
+                  />
+
+                  <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                    Select a player card, then tap the pitch to place. Drag placed markers for fine adjustments. Coordinates are saved per player for this match.
+                  </p>
+                </div>
+
+                <div className="grid content-start gap-3">
+                  {[...selectedLineupPlayers]
+                    .sort((first, second) => roleRank(lineupRoleForPlayer(first.id)) - roleRank(lineupRoleForPlayer(second.id)) || first.number - second.number || first.name.localeCompare(second.name))
+                    .map((player) => (
+                      <div key={player.id} className={clsx("grid gap-3 rounded-lg border bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-center", selectedPitchPlayerId === player.id ? "border-blue-500 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : "border-slate-200")}>
+                        <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", player.id)} onClick={() => setSelectedPitchPlayerId(player.id)} className="min-w-0 text-left">
+                          <p className="font-black text-slate-950">#{player.number} {player.name}</p>
+                          <p className="text-sm font-semibold text-slate-500">{player.position || "Player"}</p>
+                          {lineupPositions[player.id] ? <p className="mt-1 text-xs font-black text-blue-600">x {Math.round(lineupPositions[player.id].x)} / y {Math.round(lineupPositions[player.id].y)}</p> : null}
+                        </button>
+                        <select value={lineupRoleForPlayer(player.id)} onChange={(event) => setLineupRole(player.id, event.target.value as MatchLineupRole)} className="orso-input mt-0 min-w-48">
+                          <option value="starting">Starting XI</option>
+                          <option value="substitute">Substitute</option>
+                          <option value="reserve">Reserve / Not in squad</option>
+                        </select>
+                      </div>
+                    ))}
+                  {selectedLineupPlayers.length === 0 ? <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">No players available for this team.</p> : null}
+                </div>
+              </div>
+              <div>
+                <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                  <Save size={16} aria-hidden="true" />
+                  Save tactical lineup
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">Select a football match to manage lineups.</p>
+          )}
+        </form>
+      </section>
+
       {selectedEventSport === "Football" ? (
       <section className={adminPanelClass("timeline")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -1319,9 +1833,13 @@ export function AdminScoreForm() {
             <span className={labelClass()}>Type</span>
             <select value={eventForm.type} onChange={(event) => setEventForm({ ...eventForm, type: event.target.value as MatchEventType })} className={inputClass()}>
               <option value="goal">Goal</option>
+              <option value="assist">Assist</option>
               <option value="yellow">Yellow card</option>
               <option value="red">Red card</option>
               <option value="substitution">Substitution</option>
+              <option value="own_goal">Own goal</option>
+              <option value="penalty_goal">Penalty goal</option>
+              <option value="missed_penalty">Missed penalty</option>
             </select>
           </label>
           <label>
@@ -1397,6 +1915,11 @@ export function AdminScoreForm() {
           {sectionTitle("Scores", "Fast score update panel for live scoring.")}
           <div className="flex flex-wrap items-center gap-2">
             {sportBadge(selectedScoreSport)}
+            {selectedScoreMatch ? (
+              <Link href={`/admin/match-console/${selectedScoreMatch.id}`} className="rounded-lg border border-blue-200 bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+                Open Match Console
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={() => setCompactScorerMode((current) => !current)}
@@ -1538,6 +2061,82 @@ export function AdminScoreForm() {
             </button>
           </div>
         </form>
+        {selectedScoreSport === "Football" ? (
+          <form onSubmit={submitSubstitution} className="mt-5 grid gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4 md:grid-cols-6">
+            <div className="md:col-span-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black text-blue-950">Substitution event</h3>
+                  <p className="mt-1 text-sm font-semibold text-blue-700">Save football substitutions to the live match timeline. Maximum 5 per team.</p>
+                </div>
+                {selectedSubstitutionTeam ? (
+                  <span className={clsx("rounded-lg px-3 py-2 text-sm font-black", substitutionLimitReached ? "bg-red-100 text-red-700" : "bg-white text-blue-700")}>
+                    {substitutionCount}/5 used
+                  </span>
+                ) : null}
+              </div>
+              {substitutionLimitReached ? (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{selectedSubstitutionTeam?.name ?? "Team"} already used 5 substitutions.</p>
+              ) : null}
+            </div>
+            <label className="md:col-span-2">
+              <span className={labelClass()}>Match</span>
+              <select value={selectedSubstitutionMatch?.id ?? ""} onChange={(event) => setSubstitutionForm({ ...substitutionForm, matchId: event.target.value, teamId: "", playerInId: "", playerOutId: "" })} className={inputClass()}>
+                {scoreMatches.filter((match) => match.sport === "Football").map((match) => {
+                  const home = data.teams.find((team) => team.id === match.homeTeamId);
+                  const away = data.teams.find((team) => team.id === match.awayTeamId);
+                  return (
+                    <option key={match.id} value={match.id}>
+                      {home?.name} vs {away?.name} - {match.court}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label>
+              <span className={labelClass()}>Team</span>
+              <select value={selectedSubstitutionTeam?.id ?? ""} onChange={(event) => setSubstitutionForm({ ...substitutionForm, teamId: event.target.value, playerInId: "", playerOutId: "" })} className={inputClass()}>
+                {substitutionTeamOptions.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className={labelClass()}>Minute</span>
+              <input value={substitutionForm.minute} onChange={(event) => setSubstitutionForm({ ...substitutionForm, minute: event.target.value })} className={inputClass()} placeholder="62' or 90+1'" />
+            </label>
+            <label>
+              <span className={labelClass()}>Player out</span>
+              <select value={substitutionForm.playerOutId} onChange={(event) => setSubstitutionForm({ ...substitutionForm, playerOutId: event.target.value })} className={inputClass()}>
+                <option value="">Select player</option>
+                {substitutionPlayers.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    #{player.number} {player.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className={labelClass()}>Player in</span>
+              <select value={substitutionForm.playerInId} onChange={(event) => setSubstitutionForm({ ...substitutionForm, playerInId: event.target.value })} className={inputClass()}>
+                <option value="">Select player</option>
+                {substitutionPlayers.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    #{player.number} {player.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button disabled={substitutionLimitReached} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                <Plus size={16} aria-hidden="true" />
+                Add substitution
+              </button>
+            </div>
+          </form>
+        ) : null}
         {scoreMatches.length === 0 ? <p className="mt-4 text-sm text-slate-400">No matches are available.</p> : null}
       </section>
 

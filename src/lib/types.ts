@@ -5,7 +5,7 @@ export type UserRole = "admin" | "scorer" | "viewer" | "club_admin";
 export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
 export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
 export type TournamentSportType = (typeof tournamentSportOptions)[number];
-export type MatchEventType = "goal" | "yellow" | "red" | "substitution";
+export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
 export const playerStatsBySport = {
@@ -107,10 +107,26 @@ export type MatchEvent = {
   matchId: string;
   teamId?: string;
   playerId?: string;
+  playerInId?: string;
+  playerOutId?: string;
   type: MatchEventType;
   minute: string;
   description?: string;
   createdAt?: string;
+};
+
+export const matchLineupRoles = ["starting", "substitute", "reserve"] as const;
+export type MatchLineupRole = (typeof matchLineupRoles)[number];
+
+export type MatchLineupEntry = {
+  tournamentId?: string;
+  matchId: string;
+  teamId: string;
+  playerId: string;
+  role: MatchLineupRole;
+  x?: number;
+  y?: number;
+  formation?: string;
 };
 
 export type PlayerMatchStat = {

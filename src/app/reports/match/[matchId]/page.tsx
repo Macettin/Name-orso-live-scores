@@ -9,16 +9,24 @@ import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventT
 
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
+  assist: "A",
   yellow: "YC",
   red: "RC",
-  substitution: "SUB"
+  substitution: "SUB",
+  own_goal: "OG",
+  penalty_goal: "PEN",
+  missed_penalty: "MISS"
 };
 
 const eventLabels: Record<MatchEventType, string> = {
   goal: "Goal",
+  assist: "Assist",
   yellow: "Yellow card",
   red: "Red card",
-  substitution: "Substitution"
+  substitution: "Substitution",
+  own_goal: "Own goal",
+  penalty_goal: "Penalty goal",
+  missed_penalty: "Missed penalty"
 };
 
 function minuteSortValue(event: MatchEvent) {

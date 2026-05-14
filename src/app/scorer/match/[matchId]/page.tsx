@@ -222,9 +222,13 @@ export default function ScorerMatchPage() {
 
     const labels: Record<MatchEventType, string> = {
       goal: "Goal",
+      assist: "Assist",
       yellow: "Yellow card",
       red: "Red card",
-      substitution: "Substitution"
+      substitution: "Substitution",
+      own_goal: "Own goal",
+      penalty_goal: "Penalty goal",
+      missed_penalty: "Missed penalty"
     };
 
     void saveEvent({

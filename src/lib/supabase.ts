@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -151,10 +151,23 @@ type MatchEventRow = {
   match_id: string;
   team_id: string | null;
   player_id: string | null;
+  player_in_id?: string | null;
+  player_out_id?: string | null;
   event_type: MatchEventType;
   minute: string;
   description: string | null;
   created_at: string | null;
+};
+
+type MatchLineupRow = {
+  tournament_id: string;
+  match_id: string;
+  team_id: string;
+  player_id: string;
+  role: MatchLineupRole;
+  x: number | null;
+  y: number | null;
+  formation: string | null;
 };
 
 type TournamentRow = {
@@ -287,10 +300,25 @@ function mapMatchEvent(row: MatchEventRow): MatchEvent {
     matchId: row.match_id,
     teamId: row.team_id ?? undefined,
     playerId: row.player_id ?? undefined,
+    playerInId: row.player_in_id ?? undefined,
+    playerOutId: row.player_out_id ?? undefined,
     type: row.event_type,
     minute: row.minute,
     description: row.description ?? undefined,
     createdAt: row.created_at ?? undefined
+  };
+}
+
+function mapMatchLineup(row: MatchLineupRow): MatchLineupEntry {
+  return {
+    tournamentId: row.tournament_id,
+    matchId: row.match_id,
+    teamId: row.team_id,
+    playerId: row.player_id,
+    role: row.role,
+    x: row.x ?? undefined,
+    y: row.y ?? undefined,
+    formation: row.formation ?? undefined
   };
 }
 
@@ -393,7 +421,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
 
   const [
     { data: matchRows, error: matchError },
-    { data: eventRows, error: eventError }
+    eventResult,
+    { data: lineupRows, error: lineupError }
   ] = await Promise.all([
     supabase
     .from("matches")
@@ -403,13 +432,39 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
       .order("time"),
     supabase
       .from("match_events")
-      .select("id,tournament_id,match_id,team_id,player_id,event_type,minute,description,created_at")
+      .select("id,tournament_id,match_id,team_id,player_id,player_in_id,player_out_id,event_type,minute,description,created_at")
       .eq("tournament_id", tournamentId)
-      .order("minute")
+      .order("minute"),
+    supabase
+      .from("match_lineups")
+      .select("tournament_id,match_id,team_id,player_id,role,x,y,formation")
+      .eq("tournament_id", tournamentId)
   ]);
 
   if (matchError) throw matchError;
-  if (eventError) throw eventError;
+  if (eventResult.error && !(eventResult.error.code === "PGRST204" || eventResult.error.code === "42703")) throw eventResult.error;
+  if (lineupError && !isMissingRelationError(lineupError) && !(lineupError.code === "PGRST204" || lineupError.code === "42703")) throw lineupError;
+
+  let eventRows = eventResult.data as MatchEventRow[] | null;
+  if (eventResult.error && (eventResult.error.code === "PGRST204" || eventResult.error.code === "42703")) {
+    const { data: fallbackEventRows, error: fallbackEventError } = await supabase
+      .from("match_events")
+      .select("id,tournament_id,match_id,team_id,player_id,event_type,minute,description,created_at")
+      .eq("tournament_id", tournamentId)
+      .order("minute");
+    if (fallbackEventError) throw fallbackEventError;
+    eventRows = fallbackEventRows as MatchEventRow[] | null;
+  }
+
+  let safeLineupRows = lineupRows as MatchLineupRow[] | null;
+  if (lineupError && (lineupError.code === "PGRST204" || lineupError.code === "42703")) {
+    const { data: fallbackLineupRows, error: fallbackLineupError } = await supabase
+      .from("match_lineups")
+      .select("tournament_id,match_id,team_id,player_id,role")
+      .eq("tournament_id", tournamentId);
+    if (fallbackLineupError && !isMissingRelationError(fallbackLineupError)) throw fallbackLineupError;
+    safeLineupRows = fallbackLineupError ? [] : fallbackLineupRows as MatchLineupRow[] | null;
+  }
 
   return {
     tournaments: ((tournamentRows ?? []) as TournamentRow[]).map(mapTournament),
@@ -417,6 +472,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     players: ((playerRows ?? []) as PlayerRow[]).map((row) => mapPlayer(row, matchStatsByPlayer)),
     matches: ((matchRows ?? []) as MatchRow[]).map((row) => mapMatch(row, teams)),
     events: ((eventRows ?? []) as MatchEventRow[]).map(mapMatchEvent),
+    matchLineups: lineupError && isMissingRelationError(lineupError) ? [] : ((safeLineupRows ?? []) as MatchLineupRow[]).map(mapMatchLineup),
     playerMatchStats,
     matchTeamStats: matchTeamStatsError ? [] : ((matchTeamStatsRows ?? []) as MatchTeamStatsRow[]).map(mapMatchTeamStats)
   };
@@ -745,16 +801,78 @@ export async function saveSupabaseMatchEvent(event: MatchEvent, tournamentId = "
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const { error } = await supabase.from("match_events").upsert({
+  const payload = {
     id: event.id,
     tournament_id: event.tournamentId ?? tournamentId,
     match_id: event.matchId,
     team_id: event.teamId ?? null,
     player_id: event.playerId ?? null,
+    player_in_id: event.playerInId ?? null,
+    player_out_id: event.playerOutId ?? null,
     event_type: event.type,
     minute: event.minute,
     description: event.description ?? null
-  });
+  };
+
+  const { error } = await supabase.from("match_events").upsert(payload);
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const { error: fallbackError } = await supabase.from("match_events").upsert({
+      id: payload.id,
+      tournament_id: payload.tournament_id,
+      match_id: payload.match_id,
+      team_id: payload.team_id,
+      player_id: payload.player_id,
+      event_type: payload.event_type,
+      minute: payload.minute,
+      description: payload.description
+    });
+    if (fallbackError) throw fallbackError;
+    return;
+  }
+  if (error) throw error;
+}
+
+export async function saveSupabaseMatchLineups(entries: MatchLineupEntry[], tournamentId = "main-tournament") {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const firstEntry = entries[0];
+  if (!firstEntry) {
+    return;
+  }
+
+  const normalizedEntries = entries.map((entry) => ({
+    tournament_id: entry.tournamentId ?? tournamentId,
+    match_id: entry.matchId,
+    team_id: entry.teamId,
+    player_id: entry.playerId,
+    role: entry.role,
+    x: entry.x ?? null,
+    y: entry.y ?? null,
+    formation: entry.formation ?? null
+  }));
+
+  const { error: deleteError } = await supabase
+    .from("match_lineups")
+    .delete()
+    .eq("tournament_id", firstEntry.tournamentId ?? tournamentId)
+    .eq("match_id", firstEntry.matchId)
+    .eq("team_id", firstEntry.teamId);
+  if (deleteError) throw deleteError;
+
+  const { error } = await supabase.from("match_lineups").upsert(normalizedEntries);
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const legacyEntries = entries.map((entry) => ({
+      tournament_id: entry.tournamentId ?? tournamentId,
+      match_id: entry.matchId,
+      team_id: entry.teamId,
+      player_id: entry.playerId,
+      role: entry.role
+    }));
+    const { error: fallbackError } = await supabase.from("match_lineups").upsert(legacyEntries);
+    if (fallbackError) throw fallbackError;
+    return;
+  }
   if (error) throw error;
 }
 

@@ -12,7 +12,7 @@ import { buildStandings, getMatchTeamStats, getTeam, type TournamentData } from 
 import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team } from "@/lib/types";
+import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team } from "@/lib/types";
 
 type MatchTab = "overview" | "timeline" | "lineups" | "analysis" | "stats" | "standings" | "report";
 
@@ -28,16 +28,24 @@ const matchTabs: { id: MatchTab; label: string }[] = [
 
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
+  assist: "A",
   yellow: "",
   red: "",
-  substitution: "\u21c4"
+  substitution: "\u21c4",
+  own_goal: "OG",
+  penalty_goal: "P",
+  missed_penalty: "MP"
 };
 
 const eventLabels: Record<MatchEventType, string> = {
   goal: "Goal",
+  assist: "Assist",
   yellow: "Yellow card",
   red: "Red card",
-  substitution: "Substitution"
+  substitution: "Substitution",
+  own_goal: "Own goal",
+  penalty_goal: "Penalty goal",
+  missed_penalty: "Missed penalty"
 };
 
 function minuteSortValue(event: MatchEvent) {
@@ -189,7 +197,7 @@ function EventIcon({ type }: { type: MatchEventType }) {
     <span
       className={clsx(
         "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-base font-black shadow-sm",
-        type === "goal" ? "border-blue-600 bg-blue-600 text-white" : "border-blue-100 bg-blue-50 text-blue-700"
+        type === "goal" || type === "penalty_goal" || type === "own_goal" ? "border-blue-600 bg-blue-600 text-white" : "border-blue-100 bg-blue-50 text-blue-700"
       )}
       aria-hidden="true"
     >
@@ -198,8 +206,11 @@ function EventIcon({ type }: { type: MatchEventType }) {
   );
 }
 
-function TimelineEventCard({ event, team, player }: { event: MatchEvent; team?: Team | null; player?: Player | null }) {
-  const isGoal = event.type === "goal";
+function TimelineEventCard({ event, team, player, playerIn, playerOut }: { event: MatchEvent; team?: Team | null; player?: Player | null; playerIn?: Player | null; playerOut?: Player | null }) {
+  const isGoal = event.type === "goal" || event.type === "penalty_goal" || event.type === "own_goal";
+  const eventText = event.type === "substitution"
+    ? `${playerIn?.name ?? "Player in"} replaces ${playerOut?.name ?? player?.name ?? "Player out"}`
+    : [player?.name, event.description].filter(Boolean).join(" - ") || "Match event";
 
   return (
     <article
@@ -225,7 +236,7 @@ function TimelineEventCard({ event, team, player }: { event: MatchEvent; team?: 
         <div className="mt-2 flex min-w-0 items-center gap-2">
           {player ? <PlayerAvatar player={player} size="h-8 w-8" /> : null}
           <p className="min-w-0 break-words text-sm font-semibold leading-6 text-slate-700">
-            {[player?.name, event.description].filter(Boolean).join(" - ") || "Match event"}
+            {eventText}
           </p>
         </div>
       </div>
@@ -572,7 +583,9 @@ function OverviewTab({
               latestEvents.map((event) => {
                 const team = event.teamId ? getTeam(data, event.teamId) : null;
                 const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
-                return <TimelineEventCard key={event.id} event={event} team={team} player={player} />;
+                const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                return <TimelineEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} />;
               })
             ) : (
               <SectionEmpty>No live events yet.</SectionEmpty>
@@ -615,7 +628,9 @@ function TimelineTab({ data, events, eventHighlight }: { data: TournamentData; e
               {grouped[group].map((event) => {
                 const team = event.teamId ? getTeam(data, event.teamId) : null;
                 const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
-                return <TimelineEventCard key={event.id} event={event} team={team} player={player} />;
+                const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                return <TimelineEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} />;
               })}
             </div>
           ))
@@ -627,12 +642,19 @@ function TimelineTab({ data, events, eventHighlight }: { data: TournamentData; e
   );
 }
 
-function PlayerChip({ player, index }: { player: Player; index: number }) {
+function PlayerChip({ player, index, status }: { player: Player; index: number; status?: "in" | "out" }) {
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">{player.number || index + 1}</span>
       <div className="min-w-0">
-        <p className="truncate text-sm font-black text-slate-950">{player.name}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-black text-slate-950">{player.name}</p>
+          {status ? (
+            <span className={clsx("shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-black", status === "in" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+              {status.toUpperCase()}
+            </span>
+          ) : null}
+        </div>
         <p className="truncate text-xs font-bold text-slate-400">{player.position || "Player"}</p>
       </div>
     </div>
@@ -648,11 +670,24 @@ function spreadPlayers(line: Player[], y: number) {
   });
 }
 
-function LineupPitch({ players, team, mode = "full" }: { players: Player[]; team?: Team; mode?: "full" | "half" }) {
+function entryForPlayer(entries: MatchLineupEntry[], playerId: string) {
+  return entries.find((entry) => entry.playerId === playerId);
+}
+
+function LineupPitch({ players, team, lineupEntries, playerStatus, mode = "full" }: { players: Player[]; team?: Team; lineupEntries: MatchLineupEntry[]; playerStatus: (player: Player) => "in" | "out" | undefined; mode?: "full" | "half" }) {
   const starters = players.slice(0, 11);
   const lines = [starters.slice(0, 1), starters.slice(1, 5), starters.slice(5, 8), starters.slice(8, 11)].filter((line) => line.length);
   const yPositions = mode === "half" ? [88, 70, 48, 24] : [88, 66, 43, 18];
-  const positionedPlayers = lines.flatMap((line, lineIndex) => spreadPlayers(line, yPositions[lineIndex] ?? 50));
+  const fallbackPositions = new Map(lines.flatMap((line, lineIndex) => spreadPlayers(line, yPositions[lineIndex] ?? 50)).map((item) => [item.player.id, item]));
+  const positionedPlayers = starters.map((player) => {
+    const entry = entryForPlayer(lineupEntries, player.id);
+    const fallback = fallbackPositions.get(player.id) ?? { player, x: 50, y: 50 };
+    return {
+      player,
+      x: typeof entry?.x === "number" ? Math.max(7, Math.min(93, entry.x)) : fallback.x,
+      y: typeof entry?.y === "number" ? Math.max(7, Math.min(93, entry.y)) : fallback.y
+    };
+  });
 
   return (
     <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white p-2 shadow-[0_18px_42px_rgba(5,150,105,0.14)] sm:p-3">
@@ -680,10 +715,10 @@ function LineupPitch({ players, team, mode = "full" }: { players: Player[]; team
         {positionedPlayers.map(({ player, x, y }) => (
           <div
             key={player.id}
-            className="absolute z-[2] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 text-center sm:w-[6.2rem]"
+            className={clsx("absolute z-[2] w-[5.4rem] -translate-x-1/2 -translate-y-1/2 text-center transition sm:w-[6.2rem]", playerStatus(player) === "out" && "opacity-45 grayscale", playerStatus(player) === "in" && "scale-105")}
             style={{ left: `${x}%`, top: `${y}%` }}
           >
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/95 shadow-[0_8px_22px_rgba(15,23,42,0.28)] ring-2 ring-blue-500/75 sm:h-11 sm:w-11">
+            <div className={clsx("mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/95 shadow-[0_8px_22px_rgba(15,23,42,0.28)] ring-2 sm:h-11 sm:w-11", playerStatus(player) === "in" ? "ring-emerald-300" : "ring-blue-500/75")}>
               <PlayerAvatar player={player} size="h-9 w-9 sm:h-10 sm:w-10" />
             </div>
             <p className="mt-1 truncate rounded-full border border-white/15 bg-slate-950/55 px-2 py-1 text-[0.66rem] font-black leading-tight text-white shadow-sm backdrop-blur sm:text-[0.72rem]">
@@ -702,9 +737,19 @@ function LineupPitch({ players, team, mode = "full" }: { players: Player[]; team
   );
 }
 
-function LineupTeam({ team, players }: { team?: Team; players: Player[] }) {
-  const starters = players.slice(0, 11);
-  const substitutes = players.slice(11);
+function playersByLineupRole(players: Player[], entries: MatchLineupEntry[], role: MatchLineupEntry["role"]) {
+  const roleIds = new Set(entries.filter((entry) => entry.role === role).map((entry) => entry.playerId));
+  return players.filter((player) => roleIds.has(player.id));
+}
+
+function LineupTeam({ team, players, lineupEntries, substitutionEvents }: { team?: Team; players: Player[]; lineupEntries: MatchLineupEntry[]; substitutionEvents: MatchEvent[] }) {
+  const hasLineupRoles = lineupEntries.length > 0;
+  const starters = hasLineupRoles ? playersByLineupRole(players, lineupEntries, "starting").slice(0, 11) : players.slice(0, 11);
+  const substitutes = hasLineupRoles ? playersByLineupRole(players, lineupEntries, "substitute") : players.slice(11);
+  const playersIn = new Set(substitutionEvents.map((event) => event.playerInId).filter(Boolean));
+  const playersOut = new Set(substitutionEvents.map((event) => event.playerOutId ?? event.playerId).filter(Boolean));
+  const playerStatus = (player: Player) => playersIn.has(player.id) ? "in" : playersOut.has(player.id) ? "out" : undefined;
+  const pitchPlayers = [...starters.filter((player) => !playersOut.has(player.id)), ...substitutes.filter((player) => playersIn.has(player.id))].slice(0, 11);
 
   return (
     <div className="grid gap-4">
@@ -712,30 +757,33 @@ function LineupTeam({ team, players }: { team?: Team; players: Player[] }) {
         <TeamLogo team={team} size="h-12 w-12" />
         <div className="min-w-0">
           <h3 className="orso-team-name orso-team-name-2 text-lg font-black text-blue-950">{team?.name ?? "Team"}</h3>
-          <p className="text-sm font-bold text-blue-700">4-3-3 / Starting XI</p>
+          <p className="text-sm font-bold text-blue-700">4-3-3 / {hasLineupRoles ? "Match lineup" : "Roster fallback"}</p>
         </div>
       </div>
-      <LineupPitch team={team} players={players} />
+      <LineupPitch team={team} players={pitchPlayers.length > 0 ? pitchPlayers : starters} lineupEntries={lineupEntries} playerStatus={playerStatus} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">Starting XI</p>
-          <div className="grid gap-2">{starters.length > 0 ? starters.map((player, index) => <PlayerChip key={player.id} player={player} index={index} />) : <SectionEmpty>No starters available.</SectionEmpty>}</div>
+          <div className="grid gap-2">{starters.length > 0 ? starters.map((player, index) => <PlayerChip key={player.id} player={player} index={index} status={playerStatus(player)} />) : <SectionEmpty>No starters available.</SectionEmpty>}</div>
         </div>
         <div>
           <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">Substitutes</p>
-          <div className="grid gap-2">{substitutes.length > 0 ? substitutes.map((player, index) => <PlayerChip key={player.id} player={player} index={index + 11} />) : <SectionEmpty>No substitutes listed.</SectionEmpty>}</div>
+          <div className="grid gap-2">{substitutes.length > 0 ? substitutes.map((player, index) => <PlayerChip key={player.id} player={player} index={index + 11} status={playerStatus(player)} />) : <SectionEmpty>No substitutes listed.</SectionEmpty>}</div>
         </div>
       </div>
     </div>
   );
 }
 
-function LineupsTab({ home, away, homePlayers, awayPlayers }: { home?: Team; away?: Team; homePlayers: Player[]; awayPlayers: Player[] }) {
+function LineupsTab({ data, match, home, away, homePlayers, awayPlayers }: { data: TournamentData; match: Match; home?: Team; away?: Team; homePlayers: Player[]; awayPlayers: Player[] }) {
+  const lineupEntries = data.matchLineups.filter((entry) => entry.matchId === match.id);
+  const substitutionEvents = data.events.filter((event) => event.matchId === match.id && event.type === "substitution");
+
   return (
     <Panel title="Lineups" eyebrow="Formation and squads">
       <div className="grid gap-6 xl:grid-cols-2">
-        <LineupTeam team={home} players={homePlayers} />
-        <LineupTeam team={away} players={awayPlayers} />
+        <LineupTeam team={home} players={homePlayers} lineupEntries={lineupEntries.filter((entry) => entry.teamId === match.homeTeamId)} substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.homeTeamId)} />
+        <LineupTeam team={away} players={awayPlayers} lineupEntries={lineupEntries.filter((entry) => entry.teamId === match.awayTeamId)} substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.awayTeamId)} />
       </div>
     </Panel>
   );
@@ -770,7 +818,8 @@ function analysisEventLabel(type: AnalysisEventKind) {
 }
 
 function analysisEventIcon(type: AnalysisEventKind, size = 15) {
-  if (type === "goal") return <CircleDot size={size} />;
+  if (type === "goal" || type === "penalty_goal" || type === "own_goal") return <CircleDot size={size} />;
+  if (type === "assist") return <Target size={size} />;
   if (type === "yellow") return <Square size={size} className="fill-yellow-300 text-yellow-300" />;
   if (type === "red") return <Square size={size} className="fill-red-600 text-red-600" />;
   if (type === "substitution") return <RotateCcw size={size} />;
@@ -778,7 +827,8 @@ function analysisEventIcon(type: AnalysisEventKind, size = 15) {
 }
 
 function analysisEventClasses(type: AnalysisEventKind) {
-  if (type === "goal") return "border-blue-500 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)]";
+  if (type === "goal" || type === "penalty_goal" || type === "own_goal") return "border-blue-500 bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)]";
+  if (type === "assist") return "border-sky-300 bg-sky-500 text-white shadow-[0_10px_24px_rgba(14,165,233,0.22)]";
   if (type === "yellow") return "border-yellow-300 bg-yellow-200 text-yellow-950 shadow-[0_10px_24px_rgba(202,138,4,0.22)]";
   if (type === "red") return "border-red-500 bg-red-600 text-white shadow-[0_10px_24px_rgba(220,38,38,0.28)]";
   if (type === "substitution") return "border-emerald-300 bg-emerald-500 text-white shadow-[0_10px_24px_rgba(5,150,105,0.22)]";
@@ -804,7 +854,7 @@ function eventPitchPosition(event: AnalysisEvent) {
 }
 
 function keyMomentCount(events: AnalysisEvent[], type: "goals" | "cards" | "subs") {
-  if (type === "goals") return events.filter((event) => event.type === "goal").length;
+  if (type === "goals") return events.filter((event) => event.type === "goal" || event.type === "penalty_goal" || event.type === "own_goal").length;
   if (type === "cards") return events.filter((event) => event.type === "yellow" || event.type === "red").length;
   return events.filter((event) => event.type === "substitution").length;
 }
@@ -854,7 +904,7 @@ function AnalysisTab({
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const analysisEvents = events
     .map((event) => ({ ...event, type: analysisEventKind(event) }) as AnalysisEvent)
-    .filter((event) => ["goal", "yellow", "red", "substitution", "shot"].includes(event.type));
+    .filter((event) => ["goal", "assist", "yellow", "red", "substitution", "own_goal", "penalty_goal", "missed_penalty", "shot"].includes(event.type));
   const filteredEvents = analysisEvents.filter((event) => {
     if (teamFilter === "home") return event.teamId === match.homeTeamId;
     if (teamFilter === "away") return event.teamId === match.awayTeamId;
@@ -1154,7 +1204,7 @@ export default function MatchPage() {
   const away = getTeam(data, match.awayTeamId);
   const tournament = data.tournaments.find((item) => item.id === match.tournamentId);
   const events = data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(first) - minuteSortValue(second));
-  const goalEvents = events.filter((event) => event.type === "goal");
+  const goalEvents = events.filter((event) => event.type === "goal" || event.type === "penalty_goal");
   const homeGoalEvents = goalEvents.filter((event) => event.teamId === match.homeTeamId);
   const awayGoalEvents = goalEvents.filter((event) => event.teamId === match.awayTeamId);
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
@@ -1289,7 +1339,7 @@ export default function MatchPage() {
       ) : null}
 
       {activeTab === "lineups" ? (
-        <LineupsTab home={home} away={away} homePlayers={homePlayers} awayPlayers={awayPlayers} />
+        <LineupsTab data={data} match={match} home={home} away={away} homePlayers={homePlayers} awayPlayers={awayPlayers} />
       ) : null}
 
       {activeTab === "analysis" ? (
