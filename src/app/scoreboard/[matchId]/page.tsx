@@ -89,10 +89,10 @@ function GoalScorers({ events, players, align = "left" }: { events: MatchEvent[]
 }
 
 function teamNameClass(name: string) {
-  if (name.length > 38) return "text-lg sm:text-xl xl:text-2xl";
-  if (name.length > 28) return "text-xl sm:text-2xl xl:text-3xl";
-  if (name.length > 20) return "text-2xl sm:text-3xl xl:text-4xl";
-  return "text-3xl sm:text-4xl xl:text-5xl";
+  if (name.length > 38) return "text-base sm:text-lg xl:text-2xl";
+  if (name.length > 28) return "text-lg sm:text-xl xl:text-3xl";
+  if (name.length > 20) return "text-xl sm:text-2xl xl:text-4xl";
+  return "text-2xl sm:text-3xl xl:text-5xl";
 }
 
 function TeamPanel({
@@ -109,12 +109,12 @@ function TeamPanel({
   players: Player[];
 }) {
   return (
-    <div className="flex h-full min-h-48 min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.22)] backdrop-blur sm:min-h-60 sm:p-5 lg:min-h-[20rem]">
-      <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+    <div className="flex h-full min-h-40 min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-3 shadow-[0_20px_56px_rgba(0,0,0,0.2)] backdrop-blur sm:min-h-48 sm:p-4 lg:min-h-[16rem] xl:min-h-[17rem]">
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 text-center">
         <p className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-white/55 sm:text-sm">{label}</p>
-        <div className="flex min-w-0 flex-col items-center gap-3">
+        <div className="flex w-full min-w-0 flex-col items-center gap-2.5">
           {logo}
-          <p className={`orso-team-name orso-team-name-2 max-w-full font-black leading-tight tracking-tight ${teamNameClass(name)}`}>{name}</p>
+          <p className={`orso-team-name orso-team-name-2 mx-auto max-w-full text-center font-black leading-tight tracking-tight ${teamNameClass(name)}`}>{name}</p>
         </div>
         <GoalScorers events={goalEvents} players={players} align="center" />
       </div>
@@ -220,18 +220,18 @@ export default function ScoreboardPage() {
         </div>
       </header>
 
-      <main className="grid flex-1 content-center py-4 sm:py-5">
-        <div className="mx-auto grid w-full max-w-[92rem] items-stretch gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(18rem,0.74fr)_minmax(0,0.95fr)] lg:gap-5 2xl:gap-6">
-          <TeamPanel label="Home" name={home?.name || "Home"} logo={<TeamLogo team={home} size="h-16 w-16 sm:h-20 sm:w-20 xl:h-24 xl:w-24" className="text-2xl" />} goalEvents={homeGoalEvents} players={homePlayers} />
-          <div className="flex min-h-48 flex-col justify-center rounded-2xl border border-white/20 px-6 py-5 text-center shadow-[0_32px_90px_rgba(0,0,0,0.38)] ring-1 ring-white/15 sm:min-h-60 sm:px-8 sm:py-7 lg:min-h-[20rem]" style={{ backgroundColor: accent }}>
+      <main className="grid flex-1 content-center py-3 sm:py-4">
+        <div className="mx-auto grid w-full max-w-[86rem] items-stretch gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(17rem,0.68fr)_minmax(0,0.9fr)] lg:gap-4 2xl:gap-5">
+          <TeamPanel label="Home" name={home?.name || "Home"} logo={<TeamLogo team={home} size="h-14 w-14 sm:h-16 sm:w-16 xl:h-20 xl:w-20" className="text-xl" />} goalEvents={homeGoalEvents} players={homePlayers} />
+          <div className="flex min-h-40 flex-col justify-center rounded-2xl border border-white/20 px-5 py-4 text-center shadow-[0_28px_76px_rgba(0,0,0,0.34)] ring-1 ring-white/15 sm:min-h-48 sm:px-7 sm:py-6 lg:min-h-[16rem] xl:min-h-[17rem]" style={{ backgroundColor: accent }}>
             <p className="mb-3 text-sm font-black uppercase tracking-[0.28em] text-white/55">Score</p>
-            <div className="text-7xl font-black leading-none tracking-tight sm:text-8xl xl:text-[7rem] 2xl:text-[8rem]">
+            <div className="text-6xl font-black leading-none tracking-tight sm:text-7xl xl:text-[6.5rem] 2xl:text-[7.5rem]">
               <span>{match.homeScore}</span>
               <span className="px-3 text-white/45 sm:px-5">-</span>
               <span>{match.awayScore}</span>
             </div>
           </div>
-          <TeamPanel label="Away" name={away?.name || "Away"} logo={<TeamLogo team={away} size="h-16 w-16 sm:h-20 sm:w-20 xl:h-24 xl:w-24" className="text-2xl" />} goalEvents={awayGoalEvents} players={awayPlayers} />
+          <TeamPanel label="Away" name={away?.name || "Away"} logo={<TeamLogo team={away} size="h-14 w-14 sm:h-16 sm:w-16 xl:h-20 xl:w-20" className="text-xl" />} goalEvents={awayGoalEvents} players={awayPlayers} />
         </div>
       </main>
 
