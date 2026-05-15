@@ -117,12 +117,12 @@ function PlayerAvatar({ player, size = "h-10 w-10" }: { player?: Player | null; 
 
 function Panel({ title, eyebrow, children, className }: { title: string; eyebrow?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={clsx("orso-card overflow-hidden", className)}>
-      <div className="orso-section-header">
+    <section className={clsx("match-panel orso-card overflow-hidden", className)}>
+      <div className="match-panel-header orso-section-header">
         {eyebrow ? <p className="text-xs font-black uppercase tracking-wide text-blue-600">{eyebrow}</p> : null}
         <h2 className="mt-1 text-lg font-black tracking-tight text-slate-950 sm:text-xl">{title}</h2>
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="match-panel-body p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -547,14 +547,14 @@ function MatchHeroTeam({
     <Link
       href={team ? `/teams/${team.id}` : "/teams"}
       className={clsx(
-        "group flex min-w-0 flex-col items-center gap-3 rounded-lg border border-white/15 bg-white/10 px-3 py-4 text-center ring-1 ring-white/10 transition hover:bg-white/15 sm:px-4",
+        "match-hero-team group flex min-w-0 flex-col items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-2 py-3 text-center ring-1 ring-white/10 transition hover:bg-white/15 sm:gap-3 sm:px-4 sm:py-4",
         align === "right" ? "md:items-end md:text-right" : "md:items-start md:text-left"
       )}
     >
-      <TeamLogo team={team} size="h-16 w-16 sm:h-20 sm:w-20" className="bg-white/95 shadow-lg transition group-hover:scale-[1.03]" />
+      <TeamLogo team={team} size="h-11 w-11 sm:h-20 sm:w-20" className="bg-white/95 shadow-lg transition group-hover:scale-[1.03]" />
       <div className="min-w-0">
         <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-white/50">{label}</p>
-        <h2 className="orso-team-name orso-team-name-2 mt-1 text-base font-black leading-tight text-white sm:text-2xl md:text-3xl">
+        <h2 className="match-hero-team-name orso-team-name orso-team-name-2 mt-1 text-sm font-black leading-tight text-white sm:text-2xl md:text-3xl">
           {team?.name ?? label}
         </h2>
       </div>
@@ -812,7 +812,7 @@ function LineupPitch({ players, team, lineupEntries, playerStatus, mode = "full"
 
   return (
     <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white p-2 shadow-[0_18px_42px_rgba(5,150,105,0.14)] sm:p-3">
-      <div className="relative mx-auto aspect-[68/105] min-h-[34rem] max-h-[46rem] w-full overflow-hidden rounded-lg border border-emerald-900/20 bg-emerald-700 text-white sm:aspect-[68/96]">
+      <div className="match-lineup-pitch relative mx-auto aspect-[68/105] min-h-[34rem] max-h-[46rem] w-full overflow-hidden rounded-lg border border-emerald-900/20 bg-emerald-700 text-white sm:aspect-[68/96]">
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.07)_0_12.5%,rgba(255,255,255,0.02)_12.5%_25%,rgba(255,255,255,0.07)_25%_37.5%,rgba(255,255,255,0.02)_37.5%_50%,rgba(255,255,255,0.07)_50%_62.5%,rgba(255,255,255,0.02)_62.5%_75%,rgba(255,255,255,0.07)_75%_87.5%,rgba(255,255,255,0.02)_87.5%_100%),linear-gradient(180deg,#167a3a,#0f6f39_48%,#0b5f34)]" />
         <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(rgba(255,255,255,0.18)_0.7px,transparent_0.7px)] [background-size:9px_9px]" />
         <div className="absolute inset-[4%] rounded-sm border-2 border-white/55" />
@@ -874,10 +874,10 @@ function LineupTeam({ team, players, lineupEntries, substitutionEvents }: { team
 
   return (
     <div className="grid gap-4">
-      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-        <TeamLogo team={team} size="h-12 w-12" />
+      <div className="flex min-w-0 items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 sm:px-4">
+        <TeamLogo team={team} size="h-10 w-10 sm:h-12 sm:w-12" />
         <div className="min-w-0">
-          <h3 className="orso-team-name orso-team-name-2 text-lg font-black text-blue-950">{team?.name ?? "Team"}</h3>
+          <h3 className="orso-team-name orso-team-name-2 text-base font-black text-blue-950 sm:text-lg">{team?.name ?? "Team"}</h3>
           <p className="text-sm font-bold text-blue-700">4-3-3 / {hasLineupRoles ? "Match lineup" : "Roster fallback"}</p>
         </div>
       </div>
@@ -902,7 +902,7 @@ function LineupsTab({ data, match, home, away, homePlayers, awayPlayers }: { dat
 
   return (
     <Panel title="Lineups" eyebrow="Formation and squads">
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 xl:grid-cols-2">
         <LineupTeam team={home} players={homePlayers} lineupEntries={lineupEntries.filter((entry) => entry.teamId === match.homeTeamId)} substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.homeTeamId)} />
         <LineupTeam team={away} players={awayPlayers} lineupEntries={lineupEntries.filter((entry) => entry.teamId === match.awayTeamId)} substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.awayTeamId)} />
       </div>
@@ -1337,15 +1337,15 @@ export default function MatchPage() {
   const matchVenueLabel = venueLabel(match.court, match.hallSlug);
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl gap-5 pb-8 sm:gap-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="match-center mx-auto grid w-full max-w-7xl gap-4 pb-8 sm:gap-6">
+      <header className="match-center-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Orso Match Center</p>
-          <h1 className="mt-1 break-words text-xl font-black tracking-tight text-slate-950 sm:text-3xl">
+          <h1 className="mt-1 break-words text-lg font-black tracking-tight text-slate-950 sm:text-3xl">
             {home?.name ?? "Home"} vs {away?.name ?? "Away"}
           </h1>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-row sm:items-center">
           <LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />
           <Link href={`/reports/match/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto">
             Match report
@@ -1356,10 +1356,10 @@ export default function MatchPage() {
         </div>
       </header>
 
-      <section className="overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_24px_60px_rgba(37,99,235,0.16)]">
+      <section className="match-hero-card overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_24px_60px_rgba(37,99,235,0.16)]">
         <div
           className={clsx(
-            "relative overflow-hidden p-4 text-white sm:p-6",
+            "relative overflow-hidden p-3 text-white sm:p-6",
             scoreHighlight && "orso-highlight"
           )}
           style={{ background: `linear-gradient(135deg, ${accent}, #2563eb 46%, #0f172a)` }}
@@ -1367,34 +1367,34 @@ export default function MatchPage() {
           <div className="absolute inset-x-0 top-0 h-px bg-white/35" />
           <div className="absolute -right-16 top-6 h-48 w-48 rounded-full border border-white/10" />
           <div className="absolute -left-20 bottom-0 h-56 w-56 rounded-full border border-white/10" />
-          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               {tournament?.logoUrl ? (
-                <span className="h-12 w-12 shrink-0 rounded-lg bg-white/15 bg-contain bg-center bg-no-repeat ring-1 ring-white/15" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
+                <span className="h-10 w-10 shrink-0 rounded-lg bg-white/15 bg-contain bg-center bg-no-repeat ring-1 ring-white/15 sm:h-12 sm:w-12" style={{ backgroundImage: `url(${tournament.logoUrl})` }} />
               ) : (
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/15 text-lg font-black ring-1 ring-white/15">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 text-base font-black ring-1 ring-white/15 sm:h-12 sm:w-12 sm:text-lg">
                   {(tournament?.name || "OR").slice(0, 2).toUpperCase()}
                 </span>
               )}
               <div className="min-w-0">
-                <p className="break-words text-lg font-black sm:text-2xl">{tournament?.name || "Tournament"}</p>
-                <p className="text-sm font-bold uppercase tracking-wide text-white/60">{match.sport} / {match.group} / {matchVenueLabel}</p>
+                <p className="break-words text-base font-black sm:text-2xl">{tournament?.name || "Tournament"}</p>
+                <p className="truncate text-xs font-bold uppercase tracking-wide text-white/60 sm:text-sm">{match.sport} / {match.group} / {matchVenueLabel}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm font-black sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="grid grid-cols-2 gap-2 text-xs font-black sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:text-sm">
               <span className="rounded-full bg-white px-3 py-2 text-center uppercase text-blue-700 shadow-sm">{matchStatusLabel}</span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/85">{clockLabel || match.periodLabel}</span>
+              <span className="truncate rounded-full border border-white/15 bg-white/10 px-3 py-2 text-center text-white/85">{clockLabel || match.periodLabel}</span>
             </div>
           </div>
 
-          <div className="relative mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 sm:gap-4">
+          <div className="match-score-grid relative mt-4 grid grid-cols-[minmax(5rem,1fr)_auto_minmax(5rem,1fr)] items-stretch gap-2 sm:mt-5 sm:gap-4">
             <MatchHeroTeam label="Home" team={home} events={homeGoalEvents} players={homePlayers} />
-            <div className="flex min-w-[6.25rem] items-center justify-center rounded-lg bg-white px-3 py-4 text-blue-700 shadow-xl ring-1 ring-white/80 sm:min-w-40 sm:px-5">
+            <div className="match-score-box flex min-w-[5.25rem] items-center justify-center rounded-lg bg-white px-2 py-3 text-blue-700 shadow-xl ring-1 ring-white/80 sm:min-w-40 sm:px-5 sm:py-4">
               <div className="text-center">
-                <p className="mb-1 text-xs font-black uppercase tracking-[0.24em] text-blue-400">Score</p>
-                <div className="whitespace-nowrap text-4xl font-black leading-none tracking-tight sm:text-7xl lg:text-8xl">
+                <p className="mb-1 text-[0.62rem] font-black uppercase tracking-[0.18em] text-blue-400 sm:text-xs sm:tracking-[0.24em]">Score</p>
+                <div className="whitespace-nowrap text-3xl font-black leading-none tracking-tight sm:text-7xl lg:text-8xl">
                   <span>{match.homeScore}</span>
-                  <span className="px-2 text-slate-300 sm:px-3">-</span>
+                  <span className="px-1 text-slate-300 sm:px-3">-</span>
                   <span>{match.awayScore}</span>
                 </div>
               </div>
@@ -1402,24 +1402,24 @@ export default function MatchPage() {
             <MatchHeroTeam label="Away" team={away} events={awayGoalEvents} players={awayPlayers} align="right" />
           </div>
 
-          <div className="relative mt-4 grid gap-2 text-sm font-bold text-white/75 sm:grid-cols-3">
+          <div className="relative mt-3 grid gap-2 text-xs font-bold text-white/75 sm:mt-4 sm:grid-cols-3 sm:text-sm">
             <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
               <p className="text-xs uppercase tracking-wide text-white/45">Kickoff</p>
-              <p className="mt-1 text-base font-black text-white">{match.date} {match.time}</p>
+              <p className="mt-1 text-sm font-black text-white sm:text-base">{match.date} {match.time}</p>
             </div>
             <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
               <p className="text-xs uppercase tracking-wide text-white/45">Stadium / location</p>
-              <p className="mt-1 break-words text-base font-black text-white">{matchVenueLabel}</p>
+              <p className="mt-1 truncate text-sm font-black text-white sm:break-words sm:text-base">{matchVenueLabel}</p>
             </div>
             <div className="rounded-lg bg-white/10 px-4 py-3 ring-1 ring-white/10">
               <p className="text-xs uppercase tracking-wide text-white/45">Status</p>
-              <p className="mt-1 text-base font-black text-white">{matchStatusLabel}</p>
+              <p className="mt-1 text-sm font-black text-white sm:text-base">{matchStatusLabel}</p>
             </div>
           </div>
         </div>
       </section>
 
-      <nav className="orso-tabbar sticky top-16 z-10 backdrop-blur sm:top-20">
+      <nav className="match-tabs orso-tabbar sticky top-2 z-20 backdrop-blur sm:top-20">
         <div className="grid min-w-max grid-cols-7 gap-1 sm:min-w-0">
           {matchTabs.map((tab) => (
             <button

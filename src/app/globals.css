@@ -403,6 +403,98 @@ textarea {
 }
 
 @media (max-width: 767px) {
+  .match-center {
+    gap: 0.875rem;
+    max-width: 100%;
+    overflow-x: hidden;
+    padding-bottom: 1.25rem;
+  }
+
+  .match-center-header {
+    gap: 0.625rem;
+  }
+
+  .match-center-header > div:last-child > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .match-hero-card {
+    border-radius: 0.75rem;
+  }
+
+  .match-score-grid {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .match-hero-team {
+    min-width: 0;
+    padding-inline: 0.375rem;
+  }
+
+  .match-hero-team-name {
+    font-size: clamp(0.68rem, 3.2vw, 0.92rem);
+    line-height: 1.12;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+
+  .match-score-box {
+    min-width: 4.9rem;
+  }
+
+  .match-tabs {
+    margin-inline: -0.25rem;
+    border-radius: 0.625rem;
+    padding: 0.2rem;
+    scrollbar-width: none;
+  }
+
+  .match-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .match-tabs .orso-tab {
+    min-height: 2.75rem;
+    min-width: 5.25rem;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .match-panel {
+    border-radius: 0.75rem;
+  }
+
+  .match-panel-header {
+    padding: 0.75rem 0.875rem;
+  }
+
+  .match-panel-header h2 {
+    font-size: 1rem;
+  }
+
+  .match-panel-body {
+    padding: 0.875rem;
+  }
+
+  .match-panel table {
+    font-size: 0.78rem;
+  }
+
+  .match-panel th,
+  .match-panel td {
+    padding: 0.55rem 0.625rem;
+  }
+
+  .match-lineup-pitch {
+    min-height: 25rem;
+    max-height: 31rem;
+  }
+
+  .timeline-side-card {
+    padding: 0.75rem;
+  }
+
   .timeline-rail::before {
     left: 2rem;
     transform: none;
