@@ -29,8 +29,8 @@ const matchTabs: { id: MatchTab; label: string }[] = [
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
   assist: "A",
-  yellow: "",
-  red: "",
+  yellow: "YC",
+  red: "RC",
   substitution: "\u21c4",
   own_goal: "OG",
   penalty_goal: "P",
@@ -242,6 +242,74 @@ function TimelineEventCard({ event, team, player, playerIn, playerOut }: { event
       </div>
     </article>
   );
+}
+
+function timelineEventText(event: MatchEvent, player?: Player | null, playerIn?: Player | null, playerOut?: Player | null) {
+  if (event.type === "substitution") {
+    return `${playerIn?.name ?? "Player in"} replaces ${playerOut?.name ?? player?.name ?? "Player out"}`;
+  }
+
+  return [player?.name, event.description].filter(Boolean).join(" - ") || "Match event";
+}
+
+function TimelineSideEventCard({
+  event,
+  team,
+  player,
+  playerIn,
+  playerOut,
+  side
+}: {
+  event: MatchEvent;
+  team?: Team | null;
+  player?: Player | null;
+  playerIn?: Player | null;
+  playerOut?: Player | null;
+  side: "home" | "away" | "neutral";
+}) {
+  const isGoal = event.type === "goal" || event.type === "penalty_goal" || event.type === "own_goal";
+  const avatarPlayer = event.type === "substitution" ? playerOut ?? playerIn ?? player : player;
+
+  return (
+    <article
+      className={clsx(
+        "timeline-side-card grid gap-3 rounded-xl border bg-white p-3 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ring-1 ring-white sm:p-4",
+        side === "home" && "timeline-side-card-home md:justify-self-end md:text-right",
+        side === "away" && "timeline-side-card-away md:justify-self-start",
+        side === "neutral" && "md:col-span-2 md:mx-auto md:max-w-xl",
+        isGoal ? "border-blue-300 shadow-[0_16px_36px_rgba(37,99,235,0.14)]" : "border-slate-200"
+      )}
+    >
+      <div className={clsx("flex min-w-0 items-start gap-3", side === "home" && "md:flex-row-reverse")}>
+        <EventIcon type={event.type} />
+        <div className="min-w-0 flex-1">
+          <div className={clsx("flex min-w-0 flex-wrap items-center gap-2", side === "home" && "md:justify-end")}>
+            <span className={clsx("text-sm font-black", isGoal ? "text-blue-800" : "text-slate-950")}>{eventLabels[event.type]}</span>
+            {team ? <span className="orso-team-name orso-team-name-2 max-w-40 rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{team.name}</span> : null}
+          </div>
+          <div className={clsx("mt-3 flex min-w-0 items-center gap-2", side === "home" && "md:flex-row-reverse")}>
+            <PlayerAvatar player={avatarPlayer} size="h-10 w-10" />
+            <p className="min-w-0 break-words text-sm font-semibold leading-6 text-slate-700">
+              {timelineEventText(event, player, playerIn, playerOut)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function groupEventsByMinute(events: MatchEvent[]) {
+  return events.reduce<{ minute: string; events: MatchEvent[] }[]>((groups, event) => {
+    const existing = groups.find((group) => group.minute === event.minute);
+
+    if (existing) {
+      existing.events.push(event);
+      return groups;
+    }
+
+    return [...groups, { minute: event.minute, events: [event] }];
+  }, []);
 }
 
 function statKeysForTeam(team?: Team): readonly PlayerStatKey[] {
@@ -605,33 +673,86 @@ function OverviewTab({
   );
 }
 
-function TimelineTab({ data, events, eventHighlight }: { data: TournamentData; events: MatchEvent[]; eventHighlight: boolean }) {
-  const grouped = events.reduce<Record<string, MatchEvent[]>>((groups, event) => {
-    const sortValue = minuteSortValue(event);
-    const key = sortValue <= 45 ? "First half" : sortValue >= 120 ? "Full time" : "Second half";
-    return { ...groups, [key]: [...(groups[key] ?? []), event] };
-  }, {});
-
-  const orderedGroups = ["First half", "Second half", "Full time"].filter((group) => grouped[group]?.length);
+function TimelineTab({ data, match, home, away, events, eventHighlight }: { data: TournamentData; match: Match; home?: Team; away?: Team; events: MatchEvent[]; eventHighlight: boolean }) {
+  const groupedByMinute = groupEventsByMinute(events);
 
   return (
-    <Panel title={`Timeline (${events.length})`} eyebrow="Match events">
-      <div className={clsx("grid gap-5", eventHighlight && "orso-highlight")}>
-        {orderedGroups.length > 0 ? (
-          orderedGroups.map((group) => (
-            <div key={group} className="grid gap-3">
-              <div className="flex items-center gap-3">
-                <span className="h-px flex-1 bg-blue-100" />
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">{group}</span>
-                <span className="h-px flex-1 bg-blue-100" />
+    <Panel title={`Timeline (${events.length})`} eyebrow="Live match feed">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top,#eff6ff_0%,#ffffff_62%)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <TeamLogo team={home} size="h-10 w-10" />
+          <p className="orso-team-name orso-team-name-2 text-sm font-black text-blue-950">{home?.name ?? "Home"}</p>
+        </div>
+        <span className="rounded-full bg-blue-600 px-4 py-2 text-center text-xs font-black uppercase tracking-[0.18em] text-white shadow-sm">
+          Match timeline
+        </span>
+        <div className="flex min-w-0 items-center gap-3 sm:justify-end sm:text-right">
+          <p className="orso-team-name orso-team-name-2 text-sm font-black text-slate-950">{away?.name ?? "Away"}</p>
+          <TeamLogo team={away} size="h-10 w-10" />
+        </div>
+      </div>
+
+      <div className={clsx("timeline-rail relative grid gap-4", eventHighlight && "timeline-live-pulse")}>
+        {groupedByMinute.length > 0 ? (
+          groupedByMinute.map((group) => (
+            <div key={group.minute} className="timeline-minute-row relative grid gap-3 md:grid-cols-[minmax(0,1fr)_4.75rem_minmax(0,1fr)] md:items-start">
+              <div className="hidden md:grid md:gap-3">
+                {group.events
+                  .filter((event) => event.teamId === match.homeTeamId)
+                  .map((event) => {
+                    const team = event.teamId ? getTeam(data, event.teamId) : null;
+                    const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+                    const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                    const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                    return <TimelineSideEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} side="home" />;
+                  })}
               </div>
-              {grouped[group].map((event) => {
-                const team = event.teamId ? getTeam(data, event.teamId) : null;
-                const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
-                const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
-                const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
-                return <TimelineEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} />;
-              })}
+
+              <div className="timeline-minute-badge relative z-[1] mx-auto flex h-14 min-w-16 items-center justify-center rounded-2xl border border-blue-200 bg-white px-3 text-base font-black text-blue-700 shadow-[0_12px_28px_rgba(37,99,235,0.16)]">
+                {group.minute}
+              </div>
+
+              <div className="hidden md:grid md:gap-3">
+                {group.events
+                  .filter((event) => event.teamId === match.awayTeamId)
+                  .map((event) => {
+                    const team = event.teamId ? getTeam(data, event.teamId) : null;
+                    const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+                    const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                    const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                    return <TimelineSideEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} side="away" />;
+                  })}
+                {group.events
+                  .filter((event) => event.teamId !== match.homeTeamId && event.teamId !== match.awayTeamId)
+                  .map((event) => {
+                    const team = event.teamId ? getTeam(data, event.teamId) : null;
+                    const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+                    const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                    const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                    return <TimelineSideEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} side="neutral" />;
+                  })}
+              </div>
+
+              <div className="grid gap-3 md:hidden">
+                {group.events.map((event) => {
+                  const side = event.teamId === match.homeTeamId ? "home" : event.teamId === match.awayTeamId ? "away" : "neutral";
+                  const team = event.teamId ? getTeam(data, event.teamId) : null;
+                  const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+                  const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                  const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                  return <TimelineSideEventCard key={event.id} event={event} team={team} player={player} playerIn={playerIn} playerOut={playerOut} side={side} />;
+                })}
+              </div>
+
+              <div className="sr-only">
+                {group.events.map((event) => {
+                  const team = event.teamId ? getTeam(data, event.teamId) : null;
+                  const player = event.playerId ? data.players.find((item) => item.id === event.playerId) : null;
+                  const playerIn = event.playerInId ? data.players.find((item) => item.id === event.playerInId) : null;
+                  const playerOut = event.playerOutId ? data.players.find((item) => item.id === event.playerOutId) : null;
+                  return `${event.minute} ${eventLabels[event.type]} ${team?.name ?? ""} ${timelineEventText(event, player, playerIn, playerOut)}`;
+                })}
+              </div>
             </div>
           ))
         ) : (
@@ -1335,7 +1456,7 @@ export default function MatchPage() {
       ) : null}
 
       {activeTab === "timeline" ? (
-        <TimelineTab data={data} events={events} eventHighlight={eventHighlight} />
+        <TimelineTab data={data} match={match} home={home} away={away} events={events} eventHighlight={eventHighlight} />
       ) : null}
 
       {activeTab === "lineups" ? (
