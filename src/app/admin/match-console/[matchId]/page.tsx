@@ -181,7 +181,7 @@ function TeamPanel({
   const orderedPlayers = sortPlayersForConsole(players, entries);
 
   return (
-    <section className="rounded-2xl border border-blue-100 bg-white p-3 shadow-[0_18px_42px_rgba(37,99,235,0.08)] sm:p-4">
+    <section className="rounded-2xl border border-blue-100 bg-white p-3 shadow-[0_18px_42px_rgba(37,99,235,0.08)] sm:p-4 xl:min-h-0">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <TeamLogo team={team} size="h-12 w-12" />
@@ -207,7 +207,7 @@ function TeamPanel({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-2">
+      <div className="match-console-roster mt-4 grid gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
         {orderedPlayers.map((player) => {
           const role = roleForPlayer(player, entries);
           const status = playersIn.has(player.id) ? "IN" : playersOut.has(player.id) ? "OUT" : "";
@@ -217,7 +217,7 @@ function TeamPanel({
               type="button"
               onClick={() => onPlayerClick(player)}
               className={clsx(
-                "grid min-h-20 grid-cols-[auto_1fr] gap-3 rounded-xl border p-3 text-left transition active:scale-[0.99]",
+                "grid min-h-20 grid-cols-[auto_1fr] gap-3 rounded-xl border p-3 text-left transition active:scale-[0.99] sm:min-h-24",
                 selectedPlayerId === player.id ? "border-blue-500 bg-blue-50 shadow-[0_10px_24px_rgba(37,99,235,0.16)]" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/50",
                 pendingOut && pendingOut.teamId === team?.id && pendingOut.player.id !== player.id && "ring-2 ring-emerald-200"
               )}
@@ -260,11 +260,11 @@ function ConsoleTimeline({
   onRemove: (event: MatchEvent) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-blue-100 bg-white p-3 shadow-[0_18px_42px_rgba(37,99,235,0.08)] sm:p-4">
+    <section className="rounded-2xl border border-blue-100 bg-white p-3 shadow-[0_18px_42px_rgba(37,99,235,0.08)] sm:p-4 xl:min-h-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Live timeline</p>
-          <h2 className="text-lg font-black text-slate-950">Newest events first</h2>
+          <h2 className="text-lg font-black text-slate-950">Live event feed</h2>
         </div>
         {canRemove ? (
           <button
@@ -278,7 +278,7 @@ function ConsoleTimeline({
         ) : null}
       </div>
 
-      <div className="mt-4 grid max-h-[34rem] gap-2 overflow-y-auto pr-1">
+      <div className="match-console-feed mt-4 grid gap-2 overflow-y-auto pr-1">
         {events.map((event) => {
           const team = event.teamId ? teamsById.get(event.teamId) : undefined;
           const player = event.playerId ? playersById.get(event.playerId) : undefined;
@@ -289,8 +289,8 @@ function ConsoleTimeline({
             : [player?.name, event.description].filter(Boolean).join(" - ") || actionLabels[event.type as QuickAction] || "Match event";
 
           return (
-            <article key={event.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-              <span className="flex h-10 min-w-12 items-center justify-center rounded-lg bg-blue-600 px-2 text-sm font-black text-white">{event.minute}</span>
+            <article key={event.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+              <span className="flex h-9 min-w-11 items-center justify-center rounded-lg bg-blue-600 px-2 text-sm font-black text-white">{event.minute}</span>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-blue-100 bg-white px-2 py-0.5 text-xs font-black text-blue-700">{eventIcons[event.type]}</span>
@@ -570,21 +570,21 @@ export default function MatchConsolePage() {
   }
 
   return (
-    <main className="match-console mx-auto grid w-full max-w-[1800px] gap-4 pb-8 md:gap-5">
-      <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_24px_60px_rgba(37,99,235,0.14)]">
-        <div className="bg-[radial-gradient(circle_at_top_left,#2563eb_0%,#1e40af_38%,#0f172a_100%)] p-4 text-white sm:p-5 lg:p-6">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)] xl:items-stretch">
-            <div className="grid gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <Link href="/admin" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/15" aria-label="Back to admin">
+    <main className="match-console mx-auto grid w-full max-w-[1800px] gap-3 pb-8 md:gap-4">
+      <section className="sticky top-2 z-30 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_24px_60px_rgba(37,99,235,0.18)]">
+        <div className="bg-[radial-gradient(circle_at_top_left,#2563eb_0%,#1e40af_38%,#0f172a_100%)] p-3 text-white sm:p-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(24rem,1.05fr)] xl:items-center">
+            <div className="grid gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link href="/admin" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/15" aria-label="Back to admin">
                   <ArrowLeft size={19} />
                 </Link>
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-100/75">Professional Match Console</p>
-                  <h1 className="orso-team-name orso-team-name-2 mt-1 text-2xl font-black leading-tight sm:text-4xl">
+                  <h1 className="orso-team-name orso-team-name-2 mt-1 text-xl font-black leading-tight sm:text-2xl">
                     {homeTeam?.name ?? "Home"} vs {awayTeam?.name ?? "Away"}
                   </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-white/70">
+                  <div className="mt-2 hidden flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-white/70 sm:flex">
                     <span>{match.date}</span>
                     <span className="text-white/30">/</span>
                     <span>{match.time}</span>
@@ -594,52 +594,52 @@ export default function MatchConsolePage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100/70">Status</p>
-                  <p className="mt-2 text-2xl font-black">{match.status}</p>
+                  <p className="mt-1 text-xl font-black">{match.status}</p>
                   <p className="mt-1 text-sm font-bold text-white/65">{clockStatus(match)}</p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
                   <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-100/70"><Flag size={15} /> Period</p>
-                  <p className="mt-2 text-2xl font-black">{match.periodLabel || "Pregame"}</p>
+                  <p className="mt-1 text-xl font-black">{match.periodLabel || "Pregame"}</p>
                   <p className="mt-1 text-sm font-bold text-white/65">{match.sport}</p>
                 </div>
-                <Link href={`/matches/${match.id}`} className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-left font-black transition hover:bg-white/15">
+                <Link href={`/matches/${match.id}`} className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-left font-black transition hover:bg-white/15">
                   <span>
                     <span className="block text-xs uppercase tracking-[0.18em] text-blue-100/70">Public</span>
-                    <span className="mt-2 block text-lg">Open match</span>
+                    <span className="mt-1 block text-base">Open match</span>
                   </span>
                   <ExternalLink size={20} />
                 </Link>
-                <Link href={`/scoreboard/${match.id}`} className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-left font-black transition hover:bg-white/15">
+                <Link href={`/scoreboard/${match.id}`} className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-left font-black transition hover:bg-white/15">
                   <span>
                     <span className="block text-xs uppercase tracking-[0.18em] text-blue-100/70">Display</span>
-                    <span className="mt-2 block text-lg">Scoreboard</span>
+                    <span className="mt-1 block text-base">Scoreboard</span>
                   </span>
                   <ExternalLink size={20} />
                 </Link>
               </div>
             </div>
 
-            <div className="grid gap-3 rounded-2xl bg-white p-4 text-slate-950 shadow-xl">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+            <div className="grid gap-3 rounded-2xl bg-white p-3 text-slate-950 shadow-xl">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                 <div className="min-w-0 text-right">
-                  <TeamLogo team={homeTeam} size="ml-auto mb-2 h-11 w-11" />
+                  <TeamLogo team={homeTeam} size="ml-auto mb-1 h-9 w-9" />
                   <p className="orso-team-name orso-team-name-2 text-sm font-black">{homeTeam?.name ?? "Home"}</p>
                 </div>
-                <p className="whitespace-nowrap rounded-2xl bg-blue-600 px-4 py-3 text-4xl font-black leading-none text-white sm:text-5xl">
+                <p className="whitespace-nowrap rounded-2xl bg-blue-600 px-3 py-2 text-4xl font-black leading-none text-white sm:text-5xl">
                   {match.homeScore} - {match.awayScore}
                 </p>
                 <div className="min-w-0">
-                  <TeamLogo team={awayTeam} size="mb-2 h-11 w-11" />
+                  <TeamLogo team={awayTeam} size="mb-1 h-9 w-9" />
                   <p className="orso-team-name orso-team-name-2 text-sm font-black">{awayTeam?.name ?? "Away"}</p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-center">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
                 <p className="flex items-center justify-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-blue-700"><Clock3 size={15} /> Live clock</p>
-                <p className="mt-2 text-5xl font-black leading-none text-slate-950 sm:text-6xl">{clockLabel}</p>
+                <p className="mt-1 text-4xl font-black leading-none text-slate-950 sm:text-5xl">{clockLabel}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
@@ -654,39 +654,41 @@ export default function MatchConsolePage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <TeamPanel
-          team={homeTeam}
-          players={homePlayers}
-          entries={homeLineups}
-          substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.homeTeamId)}
-          score={match.homeScore}
-          selectedPlayerId={selectedPlayer?.id}
-          pendingOut={pendingOut ?? undefined}
-          onPlayerClick={handlePlayerClick}
-          onScoreDelta={(delta) => updateScore(delta, 0)}
-        />
-        <TeamPanel
-          team={awayTeam}
-          players={awayPlayers}
-          entries={awayLineups}
-          substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.awayTeamId)}
-          score={match.awayScore}
-          selectedPlayerId={selectedPlayer?.id}
-          pendingOut={pendingOut ?? undefined}
-          onPlayerClick={handlePlayerClick}
-          onScoreDelta={(delta) => updateScore(0, delta)}
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.34fr)] xl:items-start">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+          <TeamPanel
+            team={homeTeam}
+            players={homePlayers}
+            entries={homeLineups}
+            substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.homeTeamId)}
+            score={match.homeScore}
+            selectedPlayerId={selectedPlayer?.id}
+            pendingOut={pendingOut ?? undefined}
+            onPlayerClick={handlePlayerClick}
+            onScoreDelta={(delta) => updateScore(delta, 0)}
+          />
+          <TeamPanel
+            team={awayTeam}
+            players={awayPlayers}
+            entries={awayLineups}
+            substitutionEvents={substitutionEvents.filter((event) => event.teamId === match.awayTeamId)}
+            score={match.awayScore}
+            selectedPlayerId={selectedPlayer?.id}
+            pendingOut={pendingOut ?? undefined}
+            onPlayerClick={handlePlayerClick}
+            onScoreDelta={(delta) => updateScore(0, delta)}
+          />
+        </div>
+
+        <ConsoleTimeline
+          events={matchEvents}
+          teamsById={teamsById}
+          playersById={playersById}
+          canRemove={canManageAll}
+          onUndoLast={undoLastEvent}
+          onRemove={reverseEvent}
         />
       </section>
-
-      <ConsoleTimeline
-        events={matchEvents}
-        teamsById={teamsById}
-        playersById={playersById}
-        canRemove={canManageAll}
-        onUndoLast={undoLastEvent}
-        onRemove={reverseEvent}
-      />
 
       {selectedPlayer ? (
         <section className="sticky bottom-3 z-20 rounded-2xl border border-blue-200 bg-white/95 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.24)] backdrop-blur">
@@ -699,14 +701,14 @@ export default function MatchConsolePage() {
             <button type="button" onClick={() => setSelectedPlayer(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-600">Close</button>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-9">
             {(["goal", "penalty_goal", "missed_penalty", "own_goal", "assist", "yellow", "red"] as QuickAction[]).map((action) => (
               <button key={action} type="button" onClick={() => openAction(selectedPlayer, action)} className={clsx("min-h-14 rounded-xl px-3 py-2 text-sm font-black", activeAction === action ? "bg-blue-600 text-white" : "border border-blue-100 bg-blue-50 text-blue-700")}>
                 {actionLabels[action]}
               </button>
             ))}
             <button type="button" onClick={() => startSubstitutionOut(selectedPlayer)} disabled={substitutionLimitReached} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
-              <UserMinus size={16} /> Substitution
+              <UserMinus size={16} /> Sub out
             </button>
             <button type="button" onClick={() => saveSubstitution(selectedPlayer)} disabled={!pendingOut || pendingOut.teamId !== selectedPlayer.teamId || pendingOut.player.id === selectedPlayer.id} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
               <UserPlus size={16} /> Sub in
@@ -761,7 +763,7 @@ export default function MatchConsolePage() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 xl:hidden">
         <div className="flex flex-wrap items-center gap-2 text-sm font-black text-slate-500">
           <Trophy size={16} className="text-blue-600" />
           {match.date} / {match.time} / {match.court}

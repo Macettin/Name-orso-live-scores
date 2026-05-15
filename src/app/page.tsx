@@ -24,8 +24,31 @@ export default function Home() {
   return (
     <>
       <section className="mb-8 overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_20px_60px_rgba(37,99,235,0.14)]">
-        <div className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-700 to-blue-500 px-5 py-8 text-white sm:px-7 lg:px-8 lg:py-10">
+        <div className="home-hero relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-700 to-blue-500 px-5 py-8 text-white sm:px-7 lg:px-8 lg:py-10">
           <div className="absolute inset-x-0 top-0 h-px bg-white/35" />
+          <div aria-hidden="true" className="home-hero-field" />
+          <div aria-hidden="true" className="home-hero-glow home-hero-glow-one" />
+          <div aria-hidden="true" className="home-hero-glow home-hero-glow-two" />
+          <div aria-hidden="true" className="home-hero-athlete home-hero-athlete-one">
+            <span className="home-hero-athlete-head" />
+            <span className="home-hero-athlete-torso" />
+            <span className="home-hero-athlete-arm home-hero-athlete-arm-front" />
+            <span className="home-hero-athlete-arm home-hero-athlete-arm-back" />
+            <span className="home-hero-athlete-leg home-hero-athlete-leg-front" />
+            <span className="home-hero-athlete-leg home-hero-athlete-leg-back" />
+          </div>
+          <div aria-hidden="true" className="home-hero-athlete home-hero-athlete-two">
+            <span className="home-hero-athlete-head" />
+            <span className="home-hero-athlete-torso" />
+            <span className="home-hero-athlete-arm home-hero-athlete-arm-front" />
+            <span className="home-hero-athlete-arm home-hero-athlete-arm-back" />
+            <span className="home-hero-athlete-leg home-hero-athlete-leg-front" />
+            <span className="home-hero-athlete-leg home-hero-athlete-leg-back" />
+          </div>
+          <div aria-hidden="true" className="home-hero-icon home-hero-icon-ball">⚽</div>
+          <div aria-hidden="true" className="home-hero-icon home-hero-icon-hoop">◎</div>
+          <div aria-hidden="true" className="home-hero-icon home-hero-icon-pulse">⌁</div>
+          <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-slate-950/55 via-blue-950/26 to-blue-950/46" />
           <div className="relative grid gap-7 lg:grid-cols-[1fr_0.42fr] lg:items-center">
             <div className="min-w-0">
               <div className="inline-flex max-w-full items-center rounded-full border border-white/20 bg-white/12 px-3 py-1.5 text-sm font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
