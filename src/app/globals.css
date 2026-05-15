@@ -212,6 +212,51 @@ textarea {
   .admin-dashboard.admin-dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: rgba(96, 165, 250, 0.18);
   }
+
+  @media (prefers-color-scheme: dark) {
+    .match-console {
+      color: #e5e7eb;
+    }
+
+    .match-console .bg-white {
+      border-color: rgba(96, 165, 250, 0.22);
+      background-color: #0f172a;
+      color: #e5e7eb;
+    }
+
+    .match-console .bg-slate-50,
+    .match-console .bg-blue-50 {
+      background-color: rgba(30, 41, 59, 0.88);
+    }
+
+    .match-console .text-slate-950,
+    .match-console .text-slate-900 {
+      color: #f8fafc;
+    }
+
+    .match-console .text-slate-700,
+    .match-console .text-slate-600,
+    .match-console .text-slate-500 {
+      color: #cbd5e1;
+    }
+
+    .match-console .text-blue-700,
+    .match-console .text-blue-600 {
+      color: #93c5fd;
+    }
+
+    .match-console .border-slate-200,
+    .match-console .border-blue-100,
+    .match-console .border-blue-200 {
+      border-color: rgba(96, 165, 250, 0.24);
+    }
+
+    .match-console .orso-input {
+      border-color: rgba(148, 163, 184, 0.35);
+      background: #111827;
+      color: #f8fafc;
+    }
+  }
 }
 
 .orso-team-name {

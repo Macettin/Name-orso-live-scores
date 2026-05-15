@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
-import { ArrowLeft, Clock3, ShieldAlert, TimerReset, Trash2, Trophy, Undo2, UserPlus, UserMinus } from "lucide-react";
+import { ArrowLeft, Clock3, ExternalLink, Flag, Pause, Play, RotateCcw, ShieldAlert, TimerReset, Trash2, Trophy, Undo2, UserPlus, UserMinus } from "lucide-react";
 import { TeamLogo } from "@/components/ui";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId, getMatchTeamStats, getTeam } from "@/lib/data-store";
@@ -128,18 +128,19 @@ function PlayerAvatar({ player }: { player: Player }) {
   );
 }
 
-function ScoreButton({ label, onClick, tone }: { label: string; onClick: () => void; tone: "primary" | "subtle" | "danger" }) {
+function ScoreButton({ label, onClick, tone, icon }: { label: string; onClick: () => void; tone: "primary" | "subtle" | "danger"; icon?: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={clsx(
-        "flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-black shadow-sm transition active:scale-[0.98]",
+        "flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-black shadow-sm transition active:scale-[0.98] sm:min-h-11",
         tone === "primary" && "bg-blue-600 text-white hover:bg-blue-700",
         tone === "subtle" && "border border-blue-100 bg-white text-blue-700 hover:bg-blue-50",
         tone === "danger" && "border border-red-100 bg-red-50 text-red-700 hover:bg-red-100"
       )}
     >
+      {icon}
       {label}
     </button>
   );
@@ -569,55 +570,89 @@ export default function MatchConsolePage() {
   }
 
   return (
-    <main className="grid gap-4 pb-8">
+    <main className="match-console mx-auto grid w-full max-w-[1800px] gap-4 pb-8 md:gap-5">
       <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_24px_60px_rgba(37,99,235,0.14)]">
-        <div className="bg-[radial-gradient(circle_at_top,#2563eb_0%,#0f172a_52%,#020617_100%)] p-4 text-white sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link href="/admin" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/15">
-                <ArrowLeft size={18} />
-              </Link>
-              <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-100/70">Match Console</p>
-                <h1 className="orso-team-name orso-team-name-2 text-xl font-black sm:text-3xl">{homeTeam?.name ?? "Home"} vs {awayTeam?.name ?? "Away"}</h1>
+        <div className="bg-[radial-gradient(circle_at_top_left,#2563eb_0%,#1e40af_38%,#0f172a_100%)] p-4 text-white sm:p-5 lg:p-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)] xl:items-stretch">
+            <div className="grid gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <Link href="/admin" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/15" aria-label="Back to admin">
+                  <ArrowLeft size={19} />
+                </Link>
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-100/75">Professional Match Console</p>
+                  <h1 className="orso-team-name orso-team-name-2 mt-1 text-2xl font-black leading-tight sm:text-4xl">
+                    {homeTeam?.name ?? "Home"} vs {awayTeam?.name ?? "Away"}
+                  </h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-white/70">
+                    <span>{match.date}</span>
+                    <span className="text-white/30">/</span>
+                    <span>{match.time}</span>
+                    <span className="text-white/30">/</span>
+                    <span>{match.court}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white px-4 py-3 text-slate-950 shadow-xl">
-              <div className="min-w-0 text-right">
-                <p className="orso-team-name orso-team-name-2 text-sm font-black">{homeTeam?.name ?? "Home"}</p>
-              </div>
-              <p className="whitespace-nowrap text-4xl font-black text-blue-700">{match.homeScore} - {match.awayScore}</p>
-              <div className="min-w-0">
-                <p className="orso-team-name orso-team-name-2 text-sm font-black">{awayTeam?.name ?? "Away"}</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-[auto_1fr] lg:items-center">
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-center">
-              <p className="flex items-center justify-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-blue-100/70"><Clock3 size={15} /> Clock</p>
-              <p className="mt-2 text-5xl font-black leading-none">{clockLabel}</p>
-              <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-white/65">{clockStatus(match)} / {match.status}</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100/70">Status</p>
+                  <p className="mt-2 text-2xl font-black">{match.status}</p>
+                  <p className="mt-1 text-sm font-bold text-white/65">{clockStatus(match)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-blue-100/70"><Flag size={15} /> Period</p>
+                  <p className="mt-2 text-2xl font-black">{match.periodLabel || "Pregame"}</p>
+                  <p className="mt-1 text-sm font-bold text-white/65">{match.sport}</p>
+                </div>
+                <Link href={`/matches/${match.id}`} className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-left font-black transition hover:bg-white/15">
+                  <span>
+                    <span className="block text-xs uppercase tracking-[0.18em] text-blue-100/70">Public</span>
+                    <span className="mt-2 block text-lg">Open match</span>
+                  </span>
+                  <ExternalLink size={20} />
+                </Link>
+                <Link href={`/scoreboard/${match.id}`} className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-left font-black transition hover:bg-white/15">
+                  <span>
+                    <span className="block text-xs uppercase tracking-[0.18em] text-blue-100/70">Display</span>
+                    <span className="mt-2 block text-lg">Scoreboard</span>
+                  </span>
+                  <ExternalLink size={20} />
+                </Link>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <ScoreButton label="Start" tone="primary" onClick={() => applyClockAction("start")} />
-              <ScoreButton label={match.clockRunning ? "Pause" : "Resume"} tone="subtle" onClick={() => applyClockAction(match.clockRunning ? "pause" : "resume")} />
-              <ScoreButton label="Second Half" tone="subtle" onClick={startSecondHalf} />
-              <ScoreButton label="Full Time" tone="danger" onClick={setFullTime} />
-              <ScoreButton label="Reset" tone="subtle" onClick={() => applyClockAction("reset")} />
+
+            <div className="grid gap-3 rounded-2xl bg-white p-4 text-slate-950 shadow-xl">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+                <div className="min-w-0 text-right">
+                  <TeamLogo team={homeTeam} size="ml-auto mb-2 h-11 w-11" />
+                  <p className="orso-team-name orso-team-name-2 text-sm font-black">{homeTeam?.name ?? "Home"}</p>
+                </div>
+                <p className="whitespace-nowrap rounded-2xl bg-blue-600 px-4 py-3 text-4xl font-black leading-none text-white sm:text-5xl">
+                  {match.homeScore} - {match.awayScore}
+                </p>
+                <div className="min-w-0">
+                  <TeamLogo team={awayTeam} size="mb-2 h-11 w-11" />
+                  <p className="orso-team-name orso-team-name-2 text-sm font-black">{awayTeam?.name ?? "Away"}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-center">
+                <p className="flex items-center justify-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-blue-700"><Clock3 size={15} /> Live clock</p>
+                <p className="mt-2 text-5xl font-black leading-none text-slate-950 sm:text-6xl">{clockLabel}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+                <ScoreButton label="Start" tone="primary" icon={<Play size={16} />} onClick={() => applyClockAction("start")} />
+                <ScoreButton label={match.clockRunning ? "Pause" : "Resume"} tone="subtle" icon={match.clockRunning ? <Pause size={16} /> : <Play size={16} />} onClick={() => applyClockAction(match.clockRunning ? "pause" : "resume")} />
+                <ScoreButton label="Second Half" tone="subtle" icon={<Flag size={16} />} onClick={startSecondHalf} />
+                <ScoreButton label="Full Time" tone="danger" icon={<Flag size={16} />} onClick={setFullTime} />
+                <ScoreButton label="Reset" tone="subtle" icon={<RotateCcw size={16} />} onClick={() => applyClockAction("reset")} />
+              </div>
             </div>
           </div>
         </div>
       </section>
-
-      <ConsoleTimeline
-        events={matchEvents}
-        teamsById={teamsById}
-        playersById={playersById}
-        canRemove={canManageAll}
-        onUndoLast={undoLastEvent}
-        onRemove={reverseEvent}
-      />
 
       <section className="grid gap-4 xl:grid-cols-2">
         <TeamPanel
@@ -644,27 +679,36 @@ export default function MatchConsolePage() {
         />
       </section>
 
+      <ConsoleTimeline
+        events={matchEvents}
+        teamsById={teamsById}
+        playersById={playersById}
+        canRemove={canManageAll}
+        onUndoLast={undoLastEvent}
+        onRemove={reverseEvent}
+      />
+
       {selectedPlayer ? (
         <section className="sticky bottom-3 z-20 rounded-2xl border border-blue-200 bg-white/95 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.24)] backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">{selectedTeam?.name ?? "Team"}</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Quick actions / {selectedTeam?.name ?? "Team"}</p>
               <h2 className="text-lg font-black text-slate-950">#{selectedPlayer.number} {selectedPlayer.name}</h2>
               <p className="text-sm font-semibold text-slate-500">{selectedPlayer.position || "Player"} / {selectedTeamSubsUsed}/5 subs used</p>
             </div>
             <button type="button" onClick={() => setSelectedPlayer(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-600">Close</button>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-9">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
             {(["goal", "penalty_goal", "missed_penalty", "own_goal", "assist", "yellow", "red"] as QuickAction[]).map((action) => (
-              <button key={action} type="button" onClick={() => openAction(selectedPlayer, action)} className={clsx("min-h-12 rounded-xl px-3 py-2 text-sm font-black", activeAction === action ? "bg-blue-600 text-white" : "border border-blue-100 bg-blue-50 text-blue-700")}>
+              <button key={action} type="button" onClick={() => openAction(selectedPlayer, action)} className={clsx("min-h-14 rounded-xl px-3 py-2 text-sm font-black", activeAction === action ? "bg-blue-600 text-white" : "border border-blue-100 bg-blue-50 text-blue-700")}>
                 {actionLabels[action]}
               </button>
             ))}
-            <button type="button" onClick={() => startSubstitutionOut(selectedPlayer)} disabled={substitutionLimitReached} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
-              <UserMinus size={16} /> Sub out
+            <button type="button" onClick={() => startSubstitutionOut(selectedPlayer)} disabled={substitutionLimitReached} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+              <UserMinus size={16} /> Substitution
             </button>
-            <button type="button" onClick={() => saveSubstitution(selectedPlayer)} disabled={!pendingOut || pendingOut.teamId !== selectedPlayer.teamId || pendingOut.player.id === selectedPlayer.id} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+            <button type="button" onClick={() => saveSubstitution(selectedPlayer)} disabled={!pendingOut || pendingOut.teamId !== selectedPlayer.teamId || pendingOut.player.id === selectedPlayer.id} className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
               <UserPlus size={16} /> Sub in
             </button>
           </div>
