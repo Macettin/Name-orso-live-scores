@@ -410,6 +410,10 @@ textarea {
     padding-bottom: 1.25rem;
   }
 
+  .match-center * {
+    min-width: 0;
+  }
+
   .match-center-header {
     gap: 0.625rem;
   }
@@ -432,10 +436,15 @@ textarea {
   }
 
   .match-hero-team-name {
-    font-size: clamp(0.68rem, 3.2vw, 0.92rem);
+    font-size: clamp(0.7rem, 3vw, 0.9rem);
     line-height: 1.12;
     overflow-wrap: normal;
     word-break: normal;
+    hyphens: none;
+  }
+
+  .match-hero-scorers {
+    display: none;
   }
 
   .match-score-box {
@@ -444,7 +453,10 @@ textarea {
 
   .match-tabs {
     margin-inline: -0.25rem;
+    max-width: calc(100vw - 1.5rem);
     border-radius: 0.625rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
     padding: 0.2rem;
     scrollbar-width: none;
   }
@@ -455,7 +467,7 @@ textarea {
 
   .match-tabs .orso-tab {
     min-height: 2.75rem;
-    min-width: 5.25rem;
+    min-width: 5rem;
     padding: 0.55rem 0.65rem;
     font-size: 0.78rem;
     white-space: nowrap;
@@ -477,6 +489,10 @@ textarea {
     padding: 0.875rem;
   }
 
+  .match-panel .rounded-lg {
+    border-radius: 0.625rem;
+  }
+
   .match-panel table {
     font-size: 0.78rem;
   }
@@ -493,6 +509,11 @@ textarea {
 
   .timeline-side-card {
     padding: 0.75rem;
+  }
+
+  .timeline-side-card .h-10.w-10 {
+    height: 2.25rem;
+    width: 2.25rem;
   }
 
   .timeline-rail::before {

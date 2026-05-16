@@ -525,7 +525,9 @@ function ScoreTeamCard({
           <p className="orso-team-name orso-team-name-2 mt-1 text-2xl font-black leading-tight text-white sm:text-3xl">{team?.name ?? label}</p>
         </div>
       </div>
-      <GoalScorerList events={events} players={players} align={align} />
+      <div className="match-hero-scorers">
+        <GoalScorerList events={events} players={players} align={align} />
+      </div>
     </Link>
   );
 }
@@ -1419,7 +1421,7 @@ export default function MatchPage() {
         </div>
       </section>
 
-      <nav className="match-tabs orso-tabbar sticky top-2 z-20 backdrop-blur sm:top-20">
+      <nav className="match-tabs orso-tabbar sticky top-2 z-20 max-w-full backdrop-blur sm:top-20">
         <div className="grid min-w-max grid-cols-7 gap-1 sm:min-w-0">
           {matchTabs.map((tab) => (
             <button
