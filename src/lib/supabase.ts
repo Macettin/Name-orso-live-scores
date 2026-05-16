@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -127,6 +127,8 @@ type MatchRow = {
   tournament_id: string;
   home_team_id: string;
   away_team_id: string;
+  phase: MatchPhase | null;
+  round_label: string | null;
   date: string;
   time: string;
   court: string;
@@ -274,6 +276,8 @@ function mapMatch(row: MatchRow, teams: Team[]): Match {
     awayTeamId: row.away_team_id,
     sport: home?.sport ?? "Volleyball",
     group: home?.group ?? "Group A",
+    phase: row.phase ?? undefined,
+    roundLabel: row.round_label ?? undefined,
     date: row.date,
     time: row.time,
     court: row.court,
@@ -420,13 +424,13 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   }
 
   const [
-    { data: matchRows, error: matchError },
+    matchResult,
     eventResult,
     { data: lineupRows, error: lineupError }
   ] = await Promise.all([
     supabase
     .from("matches")
-      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,clock_started_at,clock_base_seconds,clock_countdown_seconds,youtube_url,report")
+      .select("id,tournament_id,home_team_id,away_team_id,phase,round_label,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,clock_started_at,clock_base_seconds,clock_countdown_seconds,youtube_url,report")
     .eq("tournament_id", tournamentId)
     .order("date")
       .order("time"),
@@ -441,7 +445,19 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
       .eq("tournament_id", tournamentId)
   ]);
 
-  if (matchError) throw matchError;
+  let matchRows = matchResult.data as MatchRow[] | null;
+  if (matchResult.error && (matchResult.error.code === "PGRST204" || matchResult.error.code === "42703")) {
+    const { data: fallbackMatchRows, error: fallbackMatchError } = await supabase
+      .from("matches")
+      .select("id,tournament_id,home_team_id,away_team_id,date,time,court,hall_slug,status,home_score,away_score,period_label,match_minute,clock_label,clock_running,clock_started_at,clock_base_seconds,clock_countdown_seconds,youtube_url,report")
+      .eq("tournament_id", tournamentId)
+      .order("date")
+      .order("time");
+    if (fallbackMatchError) throw fallbackMatchError;
+    matchRows = fallbackMatchRows as MatchRow[] | null;
+  } else if (matchResult.error) {
+    throw matchResult.error;
+  }
   if (eventResult.error && !(eventResult.error.code === "PGRST204" || eventResult.error.code === "42703")) throw eventResult.error;
   if (lineupError && !isMissingRelationError(lineupError) && !(lineupError.code === "PGRST204" || lineupError.code === "42703")) throw lineupError;
 
@@ -718,8 +734,36 @@ export async function saveSupabaseMatch(data: TournamentData, match: Match, tour
     clock_base_seconds: normalized.clockBaseSeconds ?? null,
     clock_countdown_seconds: normalized.clockCountdownSeconds ?? null,
     youtube_url: getYouTubeEmbedUrl(normalized.youtubeUrl) ?? null,
-    report: normalized.report ?? null
+    report: normalized.report ?? null,
+    phase: normalized.phase ?? null,
+    round_label: normalized.roundLabel ?? null
   });
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const { error: fallbackError } = await supabase.from("matches").upsert({
+      id: normalized.id,
+      tournament_id: normalized.tournamentId ?? tournamentId,
+      home_team_id: normalized.homeTeamId,
+      away_team_id: normalized.awayTeamId,
+      date: normalized.date,
+      time: normalized.time,
+      court: normalized.court,
+      hall_slug: normalized.hallSlug || slugify(normalized.court),
+      status: normalized.status,
+      home_score: normalized.homeScore,
+      away_score: normalized.awayScore,
+      period_label: normalized.periodLabel,
+      match_minute: normalized.matchMinute ?? null,
+      clock_label: normalized.clockLabel ?? null,
+      clock_running: normalized.clockRunning ?? false,
+      clock_started_at: normalized.clockStartedAt ?? null,
+      clock_base_seconds: normalized.clockBaseSeconds ?? null,
+      clock_countdown_seconds: normalized.clockCountdownSeconds ?? null,
+      youtube_url: getYouTubeEmbedUrl(normalized.youtubeUrl) ?? null,
+      report: normalized.report ?? null
+    });
+    if (fallbackError) throw fallbackError;
+    return;
+  }
   if (error) throw error;
 }
 

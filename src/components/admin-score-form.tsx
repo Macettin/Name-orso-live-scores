@@ -11,6 +11,7 @@ import {
   playerStatsBySport,
   matchTeamStatKeys,
   matchTeamStatLabels,
+  matchPhaseOptions,
   sportOptions,
   tournamentSportOptions,
   type Match,
@@ -19,6 +20,7 @@ import {
   type MatchLineupRole,
   type MatchTeamStatKey,
   type MatchEventType,
+  type MatchPhase,
   type MatchStatus,
   type Player,
   type PlayerStatKey,
@@ -51,7 +53,7 @@ type PlayerForm = {
 };
 type MatchForm = Pick<
   Match,
-  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report"
+  "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report" | "phase" | "roundLabel"
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status" | "logoUrl" | "primaryColor" | "sponsorName" | "sponsorLogoUrl">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
@@ -121,6 +123,8 @@ const emptyMatch: MatchForm = {
   matchMinute: "",
   clockLabel: "",
   clockRunning: false,
+  phase: "Group Stage",
+  roundLabel: "",
   youtubeUrl: "",
   report: ""
 };
@@ -154,6 +158,7 @@ type AdminSection =
   | "teams"
   | "players"
   | "matches"
+  | "bracket_phases"
   | "lineups"
   | "live_scoring"
   | "timeline"
@@ -168,6 +173,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
+  { id: "bracket_phases", label: "Bracket / Phases", adminOnly: true },
   { id: "lineups", label: "Lineups", scorer: true },
   { id: "live_scoring", label: "Live Scoring", scorer: true },
   { id: "timeline", label: "Timeline Events", adminOnly: true },
@@ -744,6 +750,8 @@ export function AdminScoreForm() {
       clockStartedAt: existingMatch?.clockStartedAt,
       clockBaseSeconds: existingMatch?.clockBaseSeconds,
       clockCountdownSeconds: existingMatch?.clockCountdownSeconds,
+      phase: matchForm.phase,
+      roundLabel: matchForm.roundLabel?.trim() || undefined,
       youtubeUrl: matchForm.youtubeUrl || undefined,
       report: matchForm.report || undefined
     };
@@ -754,6 +762,15 @@ export function AdminScoreForm() {
       awayTeamId: teamOptions[1]?.id ?? teamOptions[0]?.id ?? ""
     });
     setMessage(`Saved match on ${match.court}.`);
+  }
+
+  function updateMatchPhase(match: Match, phase: MatchPhase, roundLabel = match.roundLabel ?? "") {
+    saveMatch({
+      ...match,
+      phase,
+      roundLabel: roundLabel.trim() || undefined
+    });
+    setMessage(`Updated ${match.id} to ${phase}${roundLabel.trim() ? ` / ${roundLabel.trim()}` : ""}.`);
   }
 
   function submitScore(event: React.FormEvent<HTMLFormElement>) {
@@ -1103,6 +1120,8 @@ export function AdminScoreForm() {
       matchMinute: match.matchMinute ?? "",
       clockLabel: match.clockLabel ?? "",
       clockRunning: match.clockRunning ?? false,
+      phase: match.phase ?? "Group Stage",
+      roundLabel: match.roundLabel ?? "",
       youtubeUrl: match.youtubeUrl ?? "",
       report: match.report ?? ""
     });
@@ -1644,6 +1663,20 @@ export function AdminScoreForm() {
             <input value={matchForm.court} onChange={(event) => setMatchForm({ ...matchForm, court: event.target.value })} className={inputClass()} />
           </label>
           <label>
+            <span className={labelClass()}>Phase</span>
+            <select value={matchForm.phase ?? "Group Stage"} onChange={(event) => setMatchForm({ ...matchForm, phase: event.target.value as MatchPhase })} className={inputClass()}>
+              {matchPhaseOptions.map((phase) => (
+                <option key={phase} value={phase}>
+                  {phase}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Round label</span>
+            <input value={matchForm.roundLabel ?? ""} onChange={(event) => setMatchForm({ ...matchForm, roundLabel: event.target.value })} className={inputClass()} placeholder="QF 1, Semi 2, Final" />
+          </label>
+          <label>
             <span className={labelClass()}>Status</span>
             <select value={matchForm.status} onChange={(event) => setMatchForm({ ...matchForm, status: event.target.value as MatchStatus })} className={inputClass()}>
               <option value="Scheduled">Scheduled</option>
@@ -1711,6 +1744,9 @@ export function AdminScoreForm() {
                 <p className="text-sm text-slate-400">
                   {match.date} {match.time} - {match.court} - {match.status} - {match.homeScore}-{match.awayScore}
                 </p>
+                <p className="mt-1 text-xs font-black uppercase tracking-wide text-blue-600">
+                  {match.phase ?? "Group Stage"}{match.roundLabel ? ` / ${match.roundLabel}` : ""}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link href={`/reports/match/${match.id}`} className="flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700">
                     Report
@@ -1723,6 +1759,66 @@ export function AdminScoreForm() {
                     <Trash2 size={14} aria-hidden="true" />
                     Delete
                   </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("bracket_phases")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Bracket and phase management", "Assign each fixture to a tournament phase and optional round label. The public bracket page uses these fields without changing scoring or reports.")}
+          {selectedTournament ? (
+            <Link href={`/tournament/${selectedTournament.id}/bracket`} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700">
+              Open public bracket
+            </Link>
+          ) : null}
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {matchPhaseOptions.map((phase) => {
+            const phaseMatches = data.matches.filter((match) => (match.phase ?? "Group Stage") === phase);
+            return (
+              <div key={phase} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-base font-black text-slate-950">{phase}</h3>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-100">{phaseMatches.length} matches</span>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  {phaseMatches.length === 0 ? <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-sm font-bold text-slate-500">No matches assigned.</p> : null}
+                  {phaseMatches.map((match) => {
+                    const home = data.teams.find((team) => team.id === match.homeTeamId);
+                    const away = data.teams.find((team) => team.id === match.awayTeamId);
+                    return (
+                      <div key={match.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-black text-slate-950">{home?.name ?? "Home"} vs {away?.name ?? "Away"}</p>
+                          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">{match.date} {match.time} / {match.status} / {match.homeScore}-{match.awayScore}</p>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                          <label>
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">Phase</span>
+                            <select value={match.phase ?? "Group Stage"} onChange={(event) => updateMatchPhase(match, event.target.value as MatchPhase)} className={inputClass()}>
+                              {matchPhaseOptions.map((phaseOption) => (
+                                <option key={phaseOption} value={phaseOption}>
+                                  {phaseOption}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">Round label</span>
+                            <input
+                              defaultValue={match.roundLabel ?? ""}
+                              onBlur={(event) => updateMatchPhase(match, match.phase ?? "Group Stage", event.target.value)}
+                              className={inputClass()}
+                              placeholder="QF 1, Semi 2"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

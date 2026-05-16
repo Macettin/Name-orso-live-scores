@@ -5,6 +5,8 @@ export type UserRole = "admin" | "scorer" | "viewer" | "club_admin";
 export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
 export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
 export type TournamentSportType = (typeof tournamentSportOptions)[number];
+export const matchPhaseOptions = ["Group Stage", "Quarter Final", "Semi Final", "Final", "3rd Place Match", "Placement Matches"] as const;
+export type MatchPhase = (typeof matchPhaseOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
@@ -81,6 +83,8 @@ export type Match = {
   tournamentId?: string;
   sport: Sport;
   group: string;
+  phase?: MatchPhase;
+  roundLabel?: string;
   court: string;
   hallSlug: string;
   date: string;
