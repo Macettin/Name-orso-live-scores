@@ -642,7 +642,8 @@ function OverviewTab({
   matchPlayers,
   venue,
   clockLabel,
-  eventHighlight
+  eventHighlight,
+  officials
 }: {
   data: TournamentData;
   match: Match;
@@ -657,6 +658,7 @@ function OverviewTab({
   venue: string;
   clockLabel: string;
   eventHighlight: boolean;
+  officials: Official[];
 }) {
   const latestEvents = [...events].reverse().slice(0, 4);
 
@@ -709,6 +711,8 @@ function OverviewTab({
       </div>
 
       <TopPerformers data={data} match={match} players={matchPlayers} />
+
+      <OfficialsCard officials={officials} />
 
       {match.youtubeUrl ? (
         <Panel title="Live stream" eyebrow="Video">
@@ -1517,6 +1521,7 @@ export default function MatchPage() {
           venue={matchVenueLabel}
           clockLabel={clockLabel}
           eventHighlight={eventHighlight}
+          officials={assignedOfficials}
         />
       ) : null}
 
