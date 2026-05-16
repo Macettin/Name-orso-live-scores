@@ -9,7 +9,7 @@ import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { buildStandings, getTeam, slugify } from "@/lib/data-store";
-import type { Match, Player, Tournament } from "@/lib/types";
+import type { Match, Player, Team, Tournament } from "@/lib/types";
 
 function formatDateRange(tournament: Tournament) {
   if (!tournament.endDate || tournament.endDate === tournament.startDate) {
@@ -62,6 +62,104 @@ function SectionShell({ eyebrow, title, children }: { eyebrow: string; title: st
       <h2 className="mt-1 text-xl font-black text-slate-950">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>
+  );
+}
+
+function SponsorStrip({ tournament, accent }: { tournament: Tournament; accent: string }) {
+  if (!tournament.sponsorName && !tournament.sponsorLogoUrl) {
+    return null;
+  }
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_18px_44px_rgba(37,99,235,0.08)]">
+      <div className="relative flex flex-col gap-3 px-4 py-4 text-white sm:flex-row sm:items-center sm:justify-between sm:px-5" style={{ background: `linear-gradient(120deg, ${accent}, #2563eb 50%, #0f172a)` }}>
+        <div className="absolute inset-0 bg-[linear-gradient(110deg,rgba(255,255,255,0.10)_0_1px,transparent_1px_42px)] opacity-25" />
+        <div className="relative min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/55">Official tournament partner</p>
+          <p className="mt-1 break-words text-lg font-black">{tournament.sponsorName || "Presented by our official partner"}</p>
+        </div>
+        {tournament.sponsorLogoUrl ? (
+          <span className="relative h-14 w-36 shrink-0 rounded-xl bg-white bg-contain bg-center bg-no-repeat p-3 shadow-lg ring-1 ring-white/20" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SponsorShowcase({ tournament }: { tournament: Tournament }) {
+  if (!tournament.sponsorName && !tournament.sponsorLogoUrl) {
+    return null;
+  }
+
+  return (
+    <SectionShell eyebrow="Partners" title="Sponsor showcase">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
+          <div className="flex min-w-0 items-center gap-3">
+            {tournament.sponsorLogoUrl ? (
+              <span className="h-16 w-28 shrink-0 rounded-xl border border-blue-100 bg-white bg-contain bg-center bg-no-repeat p-3" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
+            ) : (
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl font-black text-white">
+                <Star size={24} aria-hidden="true" />
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Official sponsor</p>
+              <h3 className="mt-1 break-words text-lg font-black text-slate-950">{tournament.sponsorName || "Tournament partner"}</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Brand visibility across live matches, scoreboard views, and tournament media.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </SectionShell>
+  );
+}
+
+function MediaGallery({ tournament, teams, streamMatch, teamLookups }: { tournament: Tournament; teams: Team[]; streamMatch?: Match; teamLookups: ReturnType<typeof getTeam>[] }) {
+  const photoCards = [
+    tournament.logoUrl ? { title: tournament.name, label: "Tournament identity", imageUrl: tournament.logoUrl } : null,
+    tournament.sponsorLogoUrl ? { title: tournament.sponsorName || "Official sponsor", label: "Partner spotlight", imageUrl: tournament.sponsorLogoUrl } : null,
+    ...teams
+      .filter((team) => team.logoUrl)
+      .slice(0, 4)
+      .map((team) => ({ title: team.name, label: team.city || team.group || "Participating team", imageUrl: team.logoUrl! }))
+  ].filter(Boolean) as { title: string; label: string; imageUrl: string }[];
+
+  if (photoCards.length === 0 && !streamMatch?.youtubeUrl) {
+    return null;
+  }
+
+  return (
+    <SectionShell eyebrow="Media" title="Media showcase">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {photoCards.map((card) => (
+          <div key={`${card.label}-${card.title}`} className="group overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
+            <div className="relative aspect-[16/10] bg-slate-900">
+              <div className="absolute inset-0 bg-contain bg-center bg-no-repeat transition duration-500 group-hover:scale-[1.03]" style={{ backgroundImage: `url(${card.imageUrl})` }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-200">{card.label}</p>
+                <p className="mt-1 break-words text-lg font-black">{card.title}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+        {streamMatch?.youtubeUrl ? (
+          <Link href={`/matches/${streamMatch.id}`} className="overflow-hidden rounded-2xl border border-blue-100 bg-blue-600 text-white shadow-sm transition hover:bg-blue-700">
+            <div className="flex aspect-[16/10] flex-col justify-between p-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
+                <PlayCircle size={26} aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Video / livestream</p>
+                <p className="mt-1 break-words text-lg font-black">{teamName(streamMatch, teamLookups)}</p>
+                <p className="mt-1 text-sm font-bold text-blue-100">{streamMatch.date} / {streamMatch.time}</p>
+              </div>
+            </div>
+          </Link>
+        ) : null}
+      </div>
+    </SectionShell>
   );
 }
 
@@ -199,6 +297,8 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
         </div>
       </section>
 
+      <SponsorStrip tournament={tournament} accent={accent} />
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
         <SectionShell eyebrow="Live now" title="Latest live matches">
           <div className="grid gap-3">
@@ -273,6 +373,10 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
           </div>
         </SectionShell>
       </div>
+
+      <SponsorShowcase tournament={tournament} />
+
+      <MediaGallery tournament={tournament} teams={teams} streamMatch={streamMatch} teamLookups={teamLookups} />
 
       {streamMatch?.youtubeUrl ? (
         <SectionShell eyebrow="Broadcast" title="Livestream">

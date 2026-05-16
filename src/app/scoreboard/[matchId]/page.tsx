@@ -246,11 +246,14 @@ export default function ScoreboardPage() {
         </div>
         <div className="flex justify-start md:justify-end">
           {tournament?.sponsorName || tournament?.sponsorLogoUrl ? (
-            <div className="flex items-center gap-4 rounded-xl bg-white/10 px-5 py-3">
+            <div className="flex min-w-0 items-center gap-4 rounded-xl border border-white/15 bg-white/10 px-5 py-3 shadow-[0_18px_42px_rgba(0,0,0,0.18)] backdrop-blur">
               {tournament.sponsorLogoUrl ? (
-                <span className="h-12 w-28 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
+                <span className="h-12 w-28 shrink-0 rounded-lg bg-white bg-contain bg-center bg-no-repeat p-2" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
               ) : null}
-              {tournament.sponsorName ? <span className="text-xl font-black">{tournament.sponsorName}</span> : null}
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/45">Presented by</p>
+                <p className="mt-1 break-words text-xl font-black">{tournament.sponsorName || "Official sponsor"}</p>
+              </div>
             </div>
           ) : null}
         </div>

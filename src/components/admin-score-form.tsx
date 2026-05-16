@@ -53,7 +53,7 @@ type MatchForm = Pick<
   Match,
   "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report"
 >;
-type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status">;
+type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status" | "logoUrl" | "primaryColor" | "sponsorName" | "sponsorLogoUrl">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
 type SubstitutionForm = {
   matchId: string;
@@ -70,7 +70,11 @@ const emptyTournament: TournamentForm = {
   location: "",
   startDate: "",
   endDate: "",
-  status: "Live"
+  status: "Live",
+  logoUrl: "",
+  primaryColor: "#2563eb",
+  sponsorName: "",
+  sponsorLogoUrl: ""
 };
 
 const emptyTeam: TeamForm = {
@@ -615,7 +619,12 @@ export function AdminScoreForm() {
     const tournament: Tournament = {
       ...tournamentForm,
       id: tournamentForm.id || createId("tournament", tournamentForm.name),
-      name: tournamentForm.name.trim()
+      name: tournamentForm.name.trim(),
+      location: tournamentForm.location.trim(),
+      logoUrl: tournamentForm.logoUrl?.trim() || undefined,
+      primaryColor: tournamentForm.primaryColor?.trim() || undefined,
+      sponsorName: tournamentForm.sponsorName?.trim() || undefined,
+      sponsorLogoUrl: tournamentForm.sponsorLogoUrl?.trim() || undefined
     };
 
     saveTournament(tournament);
@@ -1107,7 +1116,11 @@ export function AdminScoreForm() {
       location: tournament.location,
       startDate: tournament.startDate,
       endDate: tournament.endDate,
-      status: tournament.status
+      status: tournament.status,
+      logoUrl: tournament.logoUrl ?? "",
+      primaryColor: tournament.primaryColor ?? "#2563eb",
+      sponsorName: tournament.sponsorName ?? "",
+      sponsorLogoUrl: tournament.sponsorLogoUrl ?? ""
     });
   }
 
@@ -1265,7 +1278,26 @@ export function AdminScoreForm() {
             <span className={labelClass()}>End date</span>
             <input type="date" value={tournamentForm.endDate} onChange={(event) => setTournamentForm({ ...tournamentForm, endDate: event.target.value })} className={inputClass()} />
           </label>
-          <div className="flex items-end md:col-span-2">
+          <label>
+            <span className={labelClass()}>Tournament logo URL</span>
+            <input value={tournamentForm.logoUrl ?? ""} onChange={(event) => setTournamentForm({ ...tournamentForm, logoUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <label>
+            <span className={labelClass()}>Theme color</span>
+            <div className="mt-2 grid grid-cols-[3.5rem_1fr] gap-2">
+              <input type="color" value={tournamentForm.primaryColor || "#2563eb"} onChange={(event) => setTournamentForm({ ...tournamentForm, primaryColor: event.target.value })} className="h-11 rounded-lg border border-slate-200 bg-white p-1" />
+              <input value={tournamentForm.primaryColor ?? ""} onChange={(event) => setTournamentForm({ ...tournamentForm, primaryColor: event.target.value })} className="orso-input" placeholder="#2563eb" />
+            </div>
+          </label>
+          <label>
+            <span className={labelClass()}>Sponsor name</span>
+            <input value={tournamentForm.sponsorName ?? ""} onChange={(event) => setTournamentForm({ ...tournamentForm, sponsorName: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Sponsor logo URL</span>
+            <input value={tournamentForm.sponsorLogoUrl ?? ""} onChange={(event) => setTournamentForm({ ...tournamentForm, sponsorLogoUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <div className="flex items-end md:col-span-4">
             <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               {tournamentForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
               {tournamentForm.id ? "Save tournament" : "Add tournament"}
@@ -1279,6 +1311,15 @@ export function AdminScoreForm() {
               <p className="text-sm text-slate-400">
                 {tournament.sportType} - {tournament.status}
               </p>
+              {tournament.sponsorName || tournament.sponsorLogoUrl ? (
+                <div className="mt-3 flex min-w-0 items-center gap-3 rounded-xl bg-blue-50 px-3 py-2">
+                  {tournament.sponsorLogoUrl ? <span className="h-9 w-16 shrink-0 rounded-lg bg-white bg-contain bg-center bg-no-repeat ring-1 ring-blue-100" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} /> : null}
+                  <div className="min-w-0">
+                    <p className="text-[0.65rem] font-black uppercase tracking-wide text-blue-500">Sponsor</p>
+                    <p className="truncate text-sm font-black text-blue-950">{tournament.sponsorName || "Official partner"}</p>
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => setSelectedTournamentId(tournament.id)} className="flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700">
                   Select

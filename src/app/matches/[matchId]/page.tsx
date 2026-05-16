@@ -12,7 +12,7 @@ import { buildStandings, getMatchTeamStats, getTeam, type TournamentData } from 
 import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team } from "@/lib/types";
+import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
 
 type MatchTab = "overview" | "timeline" | "lineups" | "analysis" | "stats" | "standings" | "report";
 
@@ -562,6 +562,27 @@ function MatchHeroTeam({
       </div>
       <GoalScorerList events={events} players={players} align={align} />
     </Link>
+  );
+}
+
+function MatchSponsorStrip({ tournament, accent }: { tournament?: Tournament; accent: string }) {
+  if (!tournament?.sponsorName && !tournament?.sponsorLogoUrl) {
+    return null;
+  }
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-blue-100 bg-white shadow-[0_16px_40px_rgba(37,99,235,0.08)]">
+      <div className="relative flex flex-col gap-3 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between" style={{ background: `linear-gradient(120deg, ${accent}, #2563eb 54%, #0f172a)` }}>
+        <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.10)_0_1px,transparent_1px_48px)] opacity-25" />
+        <div className="relative min-w-0">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-white/50">Match partner</p>
+          <p className="mt-1 break-words text-base font-black sm:text-lg">{tournament?.sponsorName || "Official sponsor"}</p>
+        </div>
+        {tournament?.sponsorLogoUrl ? (
+          <span className="relative h-12 w-32 shrink-0 rounded-xl bg-white bg-contain bg-center bg-no-repeat shadow-sm ring-1 ring-white/20" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -1420,6 +1441,8 @@ export default function MatchPage() {
           </div>
         </div>
       </section>
+
+      <MatchSponsorStrip tournament={tournament} accent={accent} />
 
       <nav className="match-tabs orso-tabbar sticky top-2 z-20 max-w-full backdrop-blur sm:top-20">
         <div className="grid min-w-max grid-cols-7 gap-1 sm:min-w-0">

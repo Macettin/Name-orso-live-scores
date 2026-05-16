@@ -558,7 +558,11 @@ export async function saveSupabaseTournament(tournament: Tournament) {
     location: tournament.location || null,
     start_date: tournament.startDate || null,
     end_date: tournament.endDate || null,
-    status: tournament.status
+    status: tournament.status,
+    logo_url: tournament.logoUrl || null,
+    primary_color: tournament.primaryColor || null,
+    sponsor_name: tournament.sponsorName || null,
+    sponsor_logo_url: tournament.sponsorLogoUrl || null
   });
   if (error) throw error;
 }
