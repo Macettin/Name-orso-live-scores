@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, LogOut, Pencil, Plus, Save, Send, Trash2, X } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold } from "@/lib/disciplinary";
@@ -50,6 +50,17 @@ function labelClass() {
 
 function inputClass() {
   return "mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
+}
+
+function disabledInputClass(disabled: boolean) {
+  return `${inputClass()} ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-400" : ""}`;
+}
+
+function rosterStatusClass(status: Team["rosterStatus"]) {
+  if (status === "Approved") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "Submitted") return "border-blue-200 bg-blue-50 text-blue-800";
+  if (status === "Needs changes") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
 function initials(value: string) {
@@ -302,6 +313,8 @@ export default function ClubAdminPage() {
   const roster = selectedTeam ? data.players.filter((player) => player.teamId === selectedTeam.id) : [];
   const disciplinaryTableRows = disciplinaryRows({ players: roster, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
   const rosterImportReadyRows = rosterPreviewRows.filter((row) => row.status === "ready");
+  const rosterStatus = selectedTeam?.rosterStatus ?? "Draft";
+  const rosterLocked = selectedTeam?.rosterLocked ?? false;
 
   useEffect(() => {
     if (!supabaseEnabled || authLoading) {
@@ -317,6 +330,11 @@ export default function ClubAdminPage() {
     event.preventDefault();
 
     if (!selectedTeam || !activeTeamForm.name.trim()) {
+      return;
+    }
+
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before editing.");
       return;
     }
 
@@ -336,7 +354,9 @@ export default function ClubAdminPage() {
       logoUrl,
       city: activeTeamForm.city,
       coach: activeTeamForm.coach,
-      colors: activeTeamForm.colors
+      colors: activeTeamForm.colors,
+      rosterStatus: rosterStatus === "Approved" || rosterStatus === "Submitted" ? "Draft" : rosterStatus,
+      rosterApprovedAt: rosterStatus === "Approved" ? undefined : selectedTeam.rosterApprovedAt
     });
     setTeamLogoFile(null);
     setMessage(`Saved team details for ${activeTeamForm.name.trim()}.`);
@@ -353,6 +373,11 @@ export default function ClubAdminPage() {
     event.preventDefault();
 
     if (!selectedTeam || !playerForm.name.trim()) {
+      return;
+    }
+
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before editing players.");
       return;
     }
 
@@ -385,6 +410,9 @@ export default function ClubAdminPage() {
     }
 
     await savePlayer({ ...nextPlayer, photoUrl });
+    if (rosterStatus === "Approved" || rosterStatus === "Submitted") {
+      await saveTeam({ ...selectedTeam, rosterStatus: "Draft", rosterApprovedAt: undefined });
+    }
     setPlayerForm(emptyPlayerForm);
     setPlayerPhotoFile(null);
     setMessage(`Saved player: ${playerForm.name.trim()}.`);
@@ -430,6 +458,11 @@ export default function ClubAdminPage() {
   async function handleRosterFile(file?: File) {
     if (!file || !selectedTeam) return;
 
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before importing players.");
+      return;
+    }
+
     try {
       const rows = await parseRosterUpload(file);
       const preview = buildRosterPreview(rows);
@@ -443,6 +476,11 @@ export default function ClubAdminPage() {
 
   async function saveRosterImport() {
     if (!selectedTeam) return;
+
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before importing players.");
+      return;
+    }
 
     setRosterImportSaving(true);
     let saved = 0;
@@ -464,8 +502,42 @@ export default function ClubAdminPage() {
     }
 
     setRosterImportSaving(false);
+    if (saved > 0 && (rosterStatus === "Approved" || rosterStatus === "Submitted")) {
+      await saveTeam({ ...selectedTeam, rosterStatus: "Draft", rosterApprovedAt: undefined });
+    }
     setMessage(`Imported ${saved} player${saved === 1 ? "" : "s"} to ${selectedTeam.name}. ${rosterPreviewRows.length - saved} skipped or errored.`);
     setRosterPreviewRows([]);
+  }
+
+  async function deleteRosterPlayer(playerId: string) {
+    if (!selectedTeam) return;
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before deleting players.");
+      return;
+    }
+
+    await removePlayer(playerId);
+    if (rosterStatus === "Approved" || rosterStatus === "Submitted") {
+      await saveTeam({ ...selectedTeam, rosterStatus: "Draft", rosterApprovedAt: undefined });
+    }
+    setMessage("Removed player from roster.");
+  }
+
+  async function submitRosterForApproval() {
+    if (!selectedTeam) return;
+    if (rosterLocked) {
+      setMessage("This roster is locked and cannot be resubmitted.");
+      return;
+    }
+
+    await saveTeam({
+      ...selectedTeam,
+      rosterStatus: "Submitted",
+      rosterNote: "",
+      rosterLocked: false,
+      rosterSubmittedAt: new Date().toISOString()
+    });
+    setMessage(`Submitted ${selectedTeam.name} roster for approval.`);
   }
 
   if (supabaseEnabled && authLoading) {
@@ -525,6 +597,37 @@ export default function ClubAdminPage() {
 
         {selectedTeam ? (
           <>
+            <section className={`rounded-lg border p-5 shadow-sm ${rosterStatusClass(rosterStatus)}`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {rosterStatus === "Approved" ? <CheckCircle2 size={20} aria-hidden="true" /> : rosterLocked ? <Lock size={20} aria-hidden="true" /> : <AlertCircle size={20} aria-hidden="true" />}
+                    <h2 className="text-lg font-black">Roster status: {rosterStatus}</h2>
+                    {rosterLocked ? <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-black uppercase">Locked</span> : null}
+                  </div>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold">
+                    {rosterStatus === "Approved"
+                      ? "This roster is approved for public use."
+                      : rosterStatus === "Submitted"
+                        ? "Your roster is waiting for main admin review."
+                        : rosterStatus === "Needs changes"
+                          ? "Update the requested items, then submit again."
+                          : "Complete the team profile and roster, then submit for approval."}
+                  </p>
+                  {selectedTeam.rosterNote ? <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm font-bold">{selectedTeam.rosterNote}</p> : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void submitRosterForApproval()}
+                  disabled={rosterLocked || rosterStatus === "Submitted"}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <Send size={16} aria-hidden="true" />
+                  Submit roster
+                </button>
+              </div>
+            </section>
+
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5 flex flex-wrap items-center gap-3">
                 <TeamLogo team={selectedTeam} size="h-14 w-14" />
@@ -538,31 +641,32 @@ export default function ClubAdminPage() {
               <form onSubmit={submitTeam} className="grid gap-4 md:grid-cols-4">
                 <label>
                   <span className={labelClass()}>Team name</span>
-                  <input value={activeTeamForm.name} onChange={(event) => updateTeamForm({ ...activeTeamForm, name: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={activeTeamForm.name} onChange={(event) => updateTeamForm({ ...activeTeamForm, name: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>City</span>
-                  <input value={activeTeamForm.city} onChange={(event) => updateTeamForm({ ...activeTeamForm, city: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={activeTeamForm.city} onChange={(event) => updateTeamForm({ ...activeTeamForm, city: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>Coach</span>
-                  <input value={activeTeamForm.coach} onChange={(event) => updateTeamForm({ ...activeTeamForm, coach: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={activeTeamForm.coach} onChange={(event) => updateTeamForm({ ...activeTeamForm, coach: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>Colors</span>
-                  <input value={activeTeamForm.colors} onChange={(event) => updateTeamForm({ ...activeTeamForm, colors: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={activeTeamForm.colors} onChange={(event) => updateTeamForm({ ...activeTeamForm, colors: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label className="md:col-span-2">
                   <span className={labelClass()}>Team logo</span>
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={rosterLocked}
                     onChange={(event) => setTeamLogoFile(event.target.files?.[0] ?? null)}
                     className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
                   />
                 </label>
                 <div className="flex items-end md:col-span-2">
-                  <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                  <button disabled={rosterLocked} className="flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                     <Save size={16} aria-hidden="true" />
                     Save team
                   </button>
@@ -592,27 +696,28 @@ export default function ClubAdminPage() {
               <form onSubmit={submitPlayer} className="grid gap-4 md:grid-cols-4">
                 <label>
                   <span className={labelClass()}>Name</span>
-                  <input value={playerForm.name} onChange={(event) => setPlayerForm({ ...playerForm, name: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={playerForm.name} onChange={(event) => setPlayerForm({ ...playerForm, name: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>Number</span>
-                  <input type="number" value={playerForm.number} onChange={(event) => setPlayerForm({ ...playerForm, number: Number(event.target.value) })} className={inputClass()} />
+                  <input disabled={rosterLocked} type="number" value={playerForm.number} onChange={(event) => setPlayerForm({ ...playerForm, number: Number(event.target.value) })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>Position</span>
-                  <input value={playerForm.position} onChange={(event) => setPlayerForm({ ...playerForm, position: event.target.value })} className={inputClass()} />
+                  <input disabled={rosterLocked} value={playerForm.position} onChange={(event) => setPlayerForm({ ...playerForm, position: event.target.value })} className={disabledInputClass(rosterLocked)} />
                 </label>
                 <label>
                   <span className={labelClass()}>Photo</span>
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={rosterLocked}
                     onChange={(event) => setPlayerPhotoFile(event.target.files?.[0] ?? null)}
                     className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
                   />
                 </label>
                 <div className="flex items-end md:col-span-4">
-                  <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                  <button disabled={rosterLocked} className="flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                     {playerForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
                     {playerForm.id ? "Save player" : "Add player"}
                   </button>
@@ -633,6 +738,7 @@ export default function ClubAdminPage() {
                   <input
                     type="file"
                     accept=".csv,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    disabled={rosterLocked}
                     onChange={(event) => void handleRosterFile(event.target.files?.[0])}
                     className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700"
                   />
@@ -682,7 +788,7 @@ export default function ClubAdminPage() {
                   <button
                     type="button"
                     onClick={() => void saveRosterImport()}
-                    disabled={rosterImportReadyRows.length === 0 || rosterImportSaving}
+                    disabled={rosterLocked || rosterImportReadyRows.length === 0 || rosterImportSaving}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     {rosterImportSaving ? "Saving..." : "Save ready players"}
@@ -705,11 +811,11 @@ export default function ClubAdminPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => editPlayer(player)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                      <button disabled={rosterLocked} onClick={() => editPlayer(player)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
                         <Pencil size={14} aria-hidden="true" />
                         Edit
                       </button>
-                      <button onClick={() => removePlayer(player.id)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                      <button disabled={rosterLocked} onClick={() => void deleteRosterPlayer(player.id)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
                         <Trash2 size={14} aria-hidden="true" />
                         Delete
                       </button>

@@ -5,13 +5,17 @@ import { Card, PageHeader, TeamLogo } from "@/components/ui";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 export default function TeamsPage() {
-  const { data } = useTournamentData();
+  const { data, canManageAll, canManageClub, clubAdminTeamIds } = useTournamentData();
 
   return (
     <>
       <PageHeader title="Team pages" description="Browse team profiles, rosters, match history, and tournament context." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {data.teams.map((team) => (
+        {data.teams.map((team) => {
+          const rosterApproved = team.rosterStatus === "Approved";
+          const canSeeRosterStatus = canManageAll || (canManageClub && clubAdminTeamIds.includes(team.id));
+
+          return (
           <Link key={team.id} href={`/teams/${team.id}`}>
             <Card className="h-full hover:border-blue-300">
               <div className="flex items-center gap-3">
@@ -21,6 +25,11 @@ export default function TeamsPage() {
                   <h2 className="truncate text-xl font-bold text-slate-900">{team.name}</h2>
                 </div>
               </div>
+              {rosterApproved ? (
+                <span className="mt-4 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">Approved roster</span>
+              ) : canSeeRosterStatus ? (
+                <span className="mt-4 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-700 ring-1 ring-amber-100">{team.rosterStatus ?? "Draft"} roster</span>
+              ) : null}
               <dl className="mt-4 grid gap-2 text-sm text-slate-600">
                 <div className="flex justify-between gap-3">
                   <dt>Group</dt>
@@ -37,7 +46,8 @@ export default function TeamsPage() {
               </dl>
             </Card>
           </Link>
-        ))}
+          );
+        })}
       </div>
     </>
   );

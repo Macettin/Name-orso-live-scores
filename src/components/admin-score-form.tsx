@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, Unlock, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -171,6 +171,7 @@ type AdminSection =
   | "tournaments"
   | "teams"
   | "players"
+  | "roster_approvals"
   | "officials"
   | "matches"
   | "bracket_phases"
@@ -188,6 +189,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "tournaments", label: "Tournaments", adminOnly: true },
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
+  { id: "roster_approvals", label: "Roster Approvals", adminOnly: true },
   { id: "officials", label: "Officials", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
   { id: "bracket_phases", label: "Bracket / Phases", adminOnly: true },
@@ -271,6 +273,25 @@ function sectionTitle(title: string, description: string) {
 
 function sportBadge(sport: Sport) {
   return <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700 ring-1 ring-blue-100">{sport} mode</span>;
+}
+
+function rosterStatusBadge(team: Team) {
+  const status = team.rosterStatus ?? "Draft";
+  const className =
+    status === "Approved"
+      ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+      : status === "Submitted"
+        ? "bg-blue-100 text-blue-700 ring-blue-200"
+        : status === "Needs changes"
+          ? "bg-amber-100 text-amber-700 ring-amber-200"
+          : "bg-slate-100 text-slate-600 ring-slate-200";
+
+  return (
+    <span className={clsx("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1", className)}>
+      {team.rosterLocked ? <Lock size={12} aria-hidden="true" /> : null}
+      {status}
+    </span>
+  );
 }
 
 function periodOptionsForSport(sport: Sport, current?: string) {
@@ -459,6 +480,7 @@ export function AdminScoreForm() {
   const [substitutionForm, setSubstitutionForm] = useState<SubstitutionForm>(() => ({ ...emptySubstitution, matchId: data.matches[0]?.id ?? "" }));
   const [clubAdminEmail, setClubAdminEmail] = useState("");
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
+  const [rosterReviewNotes, setRosterReviewNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
   const [clockPreviewNow, setClockPreviewNow] = useState(0);
   const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
@@ -472,6 +494,16 @@ export function AdminScoreForm() {
   const [yellowSuspensionThreshold, setYellowSuspensionThreshold] = useState(readYellowCardSuspensionThreshold);
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
+  const rosterApprovalTeams = useMemo(
+    () =>
+      [...data.teams]
+        .filter((team) => !team.tournamentId || team.tournamentId === selectedTournamentId)
+        .sort((first, second) => {
+          const rank = { Submitted: 0, "Needs changes": 1, Approved: 2, Draft: 3 } as Record<string, number>;
+          return (rank[first.rosterStatus ?? "Draft"] ?? 3) - (rank[second.rosterStatus ?? "Draft"] ?? 3) || first.name.localeCompare(second.name);
+        }),
+    [data.teams, selectedTournamentId]
+  );
   const courtOptions = useMemo(
     () =>
       Array.from(new Map(data.matches.map((match) => [match.hallSlug, { hallSlug: match.hallSlug, court: match.court }])).values()).sort((first, second) =>
@@ -696,16 +728,51 @@ export function AdminScoreForm() {
       }
     }
 
+    const existingTeam = data.teams.find((item) => item.id === teamId);
     const team: Team = {
+      ...existingTeam,
       ...teamForm,
       id: teamId,
       name: teamForm.name.trim(),
-      logoUrl
+      logoUrl,
+      rosterStatus: existingTeam?.rosterStatus ?? "Draft",
+      rosterNote: existingTeam?.rosterNote,
+      rosterLocked: existingTeam?.rosterLocked ?? false,
+      rosterSubmittedAt: existingTeam?.rosterSubmittedAt,
+      rosterApprovedAt: existingTeam?.rosterApprovedAt
     };
     await saveTeam(team);
     setTeamForm(emptyTeam);
     setTeamLogoFile(null);
     setMessage(`Saved team: ${team.name}`);
+  }
+
+  async function approveRoster(team: Team) {
+    await saveTeam({
+      ...team,
+      rosterStatus: "Approved",
+      rosterNote: "",
+      rosterApprovedAt: new Date().toISOString(),
+      rosterLocked: team.rosterLocked ?? false
+    });
+    setMessage(`Approved roster for ${team.name}.`);
+  }
+
+  async function requestRosterChanges(team: Team) {
+    const note = rosterReviewNotes[team.id]?.trim();
+    await saveTeam({
+      ...team,
+      rosterStatus: "Needs changes",
+      rosterNote: note || "Please update and resubmit this roster.",
+      rosterLocked: false
+    });
+    setRosterReviewNotes((current) => ({ ...current, [team.id]: "" }));
+    setMessage(`Requested roster changes for ${team.name}.`);
+  }
+
+  async function toggleRosterLock(team: Team) {
+    await saveTeam({ ...team, rosterLocked: !team.rosterLocked });
+    setMessage(`${team.rosterLocked ? "Unlocked" : "Locked"} roster for ${team.name}.`);
   }
 
   async function submitPlayer(event: React.FormEvent<HTMLFormElement>) {
@@ -1637,6 +1704,94 @@ export function AdminScoreForm() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("roster_approvals")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Roster approvals", "Review club-submitted team profiles and player lists before publishing rosters publicly.")}
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700 ring-1 ring-blue-100">
+            {rosterApprovalTeams.filter((team) => (team.rosterStatus ?? "Draft") === "Submitted").length} submitted
+          </span>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {rosterApprovalTeams.map((team) => {
+            const roster = data.players.filter((player) => player.teamId === team.id).sort((first, second) => first.number - second.number || first.name.localeCompare(second.name));
+            const reviewNote = rosterReviewNotes[team.id] ?? "";
+            return (
+              <article key={team.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-black text-slate-950">{team.name}</h3>
+                      {rosterStatusBadge(team)}
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {team.sport} / {team.group} / {roster.length} player{roster.length === 1 ? "" : "s"}
+                    </p>
+                    {team.rosterSubmittedAt ? <p className="mt-1 text-xs font-bold text-slate-400">Submitted {new Date(team.rosterSubmittedAt).toLocaleString()}</p> : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void approveRoster(team)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white hover:bg-emerald-700">
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                      Approve
+                    </button>
+                    <button type="button" onClick={() => void toggleRosterLock(team)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                      {team.rosterLocked ? <Unlock size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
+                      {team.rosterLocked ? "Unlock" : "Lock"}
+                    </button>
+                  </div>
+                </div>
+                {team.rosterNote ? (
+                  <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                    <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                    <span>{team.rosterNote}</span>
+                  </div>
+                ) : null}
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <textarea
+                    value={reviewNote}
+                    onChange={(event) => setRosterReviewNotes((current) => ({ ...current, [team.id]: event.target.value }))}
+                    placeholder="Change request note for club admin"
+                    className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <button type="button" onClick={() => void requestRosterChanges(team)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800 hover:bg-amber-100">
+                    Request changes
+                  </button>
+                </div>
+                <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                  <div className="max-h-72 overflow-y-auto">
+                    <table className="min-w-full divide-y divide-slate-100 text-sm">
+                      <thead className="sticky top-0 bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">#</th>
+                          <th className="px-3 py-2">Player</th>
+                          <th className="px-3 py-2">Position</th>
+                          <th className="px-3 py-2">Photo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {roster.map((player) => (
+                          <tr key={player.id}>
+                            <td className="px-3 py-2 font-black text-slate-900">{player.number}</td>
+                            <td className="px-3 py-2 font-semibold text-slate-900">{player.name}</td>
+                            <td className="px-3 py-2 text-slate-600">{player.position || "-"}</td>
+                            <td className="px-3 py-2 text-slate-500">{player.photoUrl ? "Uploaded" : "-"}</td>
+                          </tr>
+                        ))}
+                        {roster.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-4 text-center font-semibold text-slate-400">No players submitted yet.</td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {rosterApprovalTeams.length === 0 ? <p className="rounded-lg border border-slate-200 p-4 text-sm font-semibold text-slate-400">No teams are available for this tournament.</p> : null}
         </div>
       </section>
 

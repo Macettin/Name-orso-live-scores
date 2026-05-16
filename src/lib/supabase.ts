@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -77,6 +77,11 @@ type TeamRow = {
   city: string | null;
   coach: string | null;
   colors: string | null;
+  roster_status?: RosterStatus | null;
+  roster_note?: string | null;
+  roster_locked?: boolean | null;
+  roster_submitted_at?: string | null;
+  roster_approved_at?: string | null;
 };
 
 type PlayerRow = {
@@ -240,7 +245,12 @@ function mapTeam(row: TeamRow): Team {
     logoUrl: row.logo_url ?? undefined,
     city: row.city ?? "",
     coach: row.coach ?? "",
-    colors: row.colors ?? ""
+    colors: row.colors ?? "",
+    rosterStatus: row.roster_status ?? "Draft",
+    rosterNote: row.roster_note ?? undefined,
+    rosterLocked: row.roster_locked ?? false,
+    rosterSubmittedAt: row.roster_submitted_at ?? undefined,
+    rosterApprovedAt: row.roster_approved_at ?? undefined
   };
 }
 
@@ -406,14 +416,18 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
 
   const [
     { data: tournamentRows, error: tournamentError },
-    { data: teamRows, error: teamError },
+    teamResult,
     playerResult,
     { data: matchStatRows, error: matchStatError },
     { data: matchTeamStatsRows, error: matchTeamStatsError },
     { data: officialRows, error: officialError }
   ] = await Promise.all([
     supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
-    supabase.from("teams").select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
+    supabase
+      .from("teams")
+      .select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors,roster_status,roster_note,roster_locked,roster_submitted_at,roster_approved_at")
+      .eq("tournament_id", tournamentId)
+      .order("name"),
     supabase
       .from("players")
       .select("id,tournament_id,team_id,name,number,position,country,birthdate,photo_url,points,goals,assists,rebounds,blocks,aces,digs,yellow_cards,red_cards")
@@ -428,10 +442,22 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   ]);
 
   if (tournamentError) throw tournamentError;
-  if (teamError) throw teamError;
   if (matchStatError) throw matchStatError;
   if (matchTeamStatsError && !isMissingRelationError(matchTeamStatsError)) throw matchTeamStatsError;
   if (officialError && !isMissingRelationError(officialError) && !(officialError.code === "PGRST204" || officialError.code === "42703")) throw officialError;
+
+  let teamRows = teamResult.data as TeamRow[] | null;
+  if (teamResult.error && (teamResult.error.code === "PGRST204" || teamResult.error.code === "42703")) {
+    const { data: fallbackTeamRows, error: fallbackTeamError } = await supabase
+      .from("teams")
+      .select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors")
+      .eq("tournament_id", tournamentId)
+      .order("name");
+    if (fallbackTeamError) throw fallbackTeamError;
+    teamRows = fallbackTeamRows as TeamRow[] | null;
+  } else if (teamResult.error) {
+    throw teamResult.error;
+  }
 
   let playerRows = playerResult.data as PlayerRow[] | null;
   if (playerResult.error && (playerResult.error.code === "PGRST204" || playerResult.error.code === "42703")) {
@@ -642,7 +668,7 @@ export async function saveSupabaseTeam(team: Team, tournamentId = "main-tourname
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const { error } = await supabase.from("teams").upsert({
+  const payload = {
     id: team.id,
     tournament_id: team.tournamentId ?? tournamentId,
     name: team.name,
@@ -651,8 +677,31 @@ export async function saveSupabaseTeam(team: Team, tournamentId = "main-tourname
     logo_url: team.logoUrl ?? null,
     city: team.city,
     coach: team.coach,
-    colors: team.colors
-  });
+    colors: team.colors,
+    roster_status: team.rosterStatus ?? "Draft",
+    roster_note: team.rosterNote ?? null,
+    roster_locked: team.rosterLocked ?? false,
+    roster_submitted_at: team.rosterSubmittedAt ?? null,
+    roster_approved_at: team.rosterApprovedAt ?? null
+  };
+
+  const { error } = await supabase.from("teams").upsert(payload);
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const fallbackPayload = {
+      id: payload.id,
+      tournament_id: payload.tournament_id,
+      name: payload.name,
+      sport: payload.sport,
+      group_name: payload.group_name,
+      logo_url: payload.logo_url,
+      city: payload.city,
+      coach: payload.coach,
+      colors: payload.colors
+    };
+    const { error: fallbackError } = await supabase.from("teams").upsert(fallbackPayload);
+    if (fallbackError) throw fallbackError;
+    return;
+  }
   if (error) throw error;
 }
 

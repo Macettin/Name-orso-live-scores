@@ -9,7 +9,7 @@ import { useTournamentData } from "@/hooks/use-tournament-data";
 
 export default function TeamPage() {
   const params = useParams<{ teamId: string }>();
-  const { data } = useTournamentData();
+  const { data, canManageAll, canManageClub, clubAdminTeamIds } = useTournamentData();
   const team = data.teams.find((item) => item.id === params.teamId);
 
   if (!team) {
@@ -18,6 +18,9 @@ export default function TeamPage() {
 
   const roster = teamPlayers(data, team.id);
   const matches = teamMatches(data, team.id);
+  const rosterApproved = team.rosterStatus === "Approved";
+  const canSeeRosterWarning = canManageAll || (canManageClub && clubAdminTeamIds.includes(team.id));
+  const visibleRoster = rosterApproved || canSeeRosterWarning ? roster : [];
 
   return (
     <>
@@ -27,8 +30,19 @@ export default function TeamPage() {
           <p className="text-sm font-bold uppercase tracking-wide text-blue-700">{team.sport} / {team.group}</p>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">{team.name}</h1>
           <p className="mt-2 text-base text-slate-600">{team.city || "No city set"}</p>
+          {rosterApproved ? (
+            <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">Approved roster</span>
+          ) : canSeeRosterWarning ? (
+            <span className="mt-3 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-700 ring-1 ring-amber-100">{team.rosterStatus ?? "Draft"} roster</span>
+          ) : null}
         </div>
       </div>
+      {!rosterApproved && canSeeRosterWarning ? (
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          This roster is not approved for public use yet. Public visitors will not see the roster stats until a main admin approves it.
+          {team.rosterNote ? <span className="mt-2 block">{team.rosterNote}</span> : null}
+        </div>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <h2 className="text-lg font-bold text-slate-900">Team profile</h2>
@@ -43,13 +57,19 @@ export default function TeamPage() {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-400">Roster size</dt>
-              <dd className="font-semibold">{roster.length}</dd>
+              <dd className="font-semibold">{visibleRoster.length}</dd>
             </div>
           </dl>
         </Card>
         <div>
           <h2 className="mb-4 text-lg font-bold text-slate-900">Roster stats</h2>
-          <PlayerStatTable players={roster} teams={data.teams} />
+          {visibleRoster.length > 0 ? (
+            <PlayerStatTable players={visibleRoster} teams={data.teams} />
+          ) : (
+            <Card>
+              <p className="text-sm font-semibold text-slate-500">Roster will be published after approval.</p>
+            </Card>
+          )}
         </div>
       </div>
       <section className="mt-8">
