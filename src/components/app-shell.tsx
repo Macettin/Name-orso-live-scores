@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, Home, MessageCircle, Shield, Trophy, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, Home, MessageCircle, Shield, Trophy, UserPlus, Users } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 const navItems = [
@@ -13,6 +13,7 @@ const navItems = [
   { href: "/standings", label: "Standings", icon: BarChart3 },
   { href: "/teams", label: "Teams", icon: Shield },
   { href: "/players", label: "Players", icon: Users },
+  { href: "/apply", label: "Apply", icon: UserPlus },
   { href: "/admin", label: "Admin", icon: ClipboardPenLine }
 ];
 

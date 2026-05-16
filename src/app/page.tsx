@@ -18,6 +18,7 @@ export default function Home() {
     { label: "Live scores", href: "/live" },
     { label: "Team stats", href: "/standings" },
     { label: "Match timeline", href: scoreboardMatch ? `/matches/${scoreboardMatch.id}` : "/fixtures" },
+    { label: "Apply / join", href: "/apply" },
     { label: "QR court pages", href: "/qr-print" }
   ];
 
@@ -73,6 +74,12 @@ export default function Home() {
             <div className="rounded-lg border border-white/18 bg-white/12 p-4 shadow-[0_18px_48px_rgba(15,23,42,0.20)] backdrop-blur md:p-5">
               <p className="text-sm font-semibold text-blue-50/80">Match operations</p>
               <div className="mt-4 grid gap-3">
+                <Link
+                  href="/apply"
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-white/30 bg-white px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50"
+                >
+                  Apply / join tournament
+                </Link>
                 <Link
                   href="/live"
                   className="inline-flex w-full items-center justify-center rounded-lg border border-white/30 bg-white/10 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-white/18"

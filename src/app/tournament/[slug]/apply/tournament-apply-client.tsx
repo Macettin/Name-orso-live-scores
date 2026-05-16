@@ -47,15 +47,19 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export default function TournamentApplyClient({ slug }: { slug: string }) {
+export default function TournamentApplyClient({ slug }: { slug?: string }) {
   const { data, selectedTournamentId, setSelectedTournamentId, submitTournamentApplication } = useTournamentData();
   const [form, setForm] = useState<ApplicationForm>(emptyForm);
+  const [selectedApplyTournamentId, setSelectedApplyTournamentId] = useState(selectedTournamentId);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const tournament = useMemo(
-    () => data.tournaments.find((item) => slugify(item.name) === slug || item.id === slug),
-    [data.tournaments, slug]
+    () =>
+      slug
+        ? data.tournaments.find((item) => slugify(item.name) === slug || item.id === slug)
+        : data.tournaments.find((item) => item.id === selectedApplyTournamentId) ?? data.tournaments.find((item) => item.id === selectedTournamentId) ?? data.tournaments[0],
+    [data.tournaments, selectedApplyTournamentId, selectedTournamentId, slug]
   );
 
   useEffect(() => {
@@ -158,6 +162,26 @@ export default function TournamentApplyClient({ slug }: { slug: string }) {
 
       <form onSubmit={submitApplication} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="grid gap-4 sm:grid-cols-2">
+          {!slug ? (
+            <label className="sm:col-span-2">
+              <span className={labelClass()}>Tournament *</span>
+              <select
+                value={tournament?.id ?? selectedApplyTournamentId}
+                onChange={(event) => {
+                  setSelectedApplyTournamentId(event.target.value);
+                  setSelectedTournamentId(event.target.value);
+                }}
+                className={inputClass()}
+              >
+                {data.tournaments.length === 0 ? <option value="">No tournaments available</option> : null}
+                {data.tournaments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             <span className={labelClass()}>Name Surname *</span>
             <input value={form.nameSurname} onChange={(event) => updateField("nameSurname", event.target.value)} className={inputClass()} />
@@ -212,7 +236,7 @@ export default function TournamentApplyClient({ slug }: { slug: string }) {
         </div>
         {message ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">{message}</p> : null}
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href={`/tournament/${slug}`} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+          <Link href={slug ? `/tournament/${slug}` : "/tournaments"} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
             Back to tournament
           </Link>
           <button disabled={submitting} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
