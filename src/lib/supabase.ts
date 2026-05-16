@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -172,6 +172,22 @@ type MatchLineupRow = {
   formation: string | null;
 };
 
+type OfficialRow = {
+  id: string;
+  tournament_id: string;
+  name: string;
+  role: OfficialRole;
+  country: string | null;
+  city: string | null;
+  photo_url: string | null;
+};
+
+type MatchOfficialRow = {
+  tournament_id: string;
+  match_id: string;
+  official_id: string;
+};
+
 type TournamentRow = {
   id: string;
   name: string;
@@ -326,6 +342,26 @@ function mapMatchLineup(row: MatchLineupRow): MatchLineupEntry {
   };
 }
 
+function mapOfficial(row: OfficialRow): Official {
+  return {
+    id: row.id,
+    tournamentId: row.tournament_id,
+    name: row.name,
+    role: row.role,
+    country: row.country ?? undefined,
+    city: row.city ?? undefined,
+    photoUrl: row.photo_url ?? undefined
+  };
+}
+
+function mapMatchOfficial(row: MatchOfficialRow): MatchOfficialAssignment {
+  return {
+    tournamentId: row.tournament_id,
+    matchId: row.match_id,
+    officialId: row.official_id
+  };
+}
+
 function mapPlayerMatchStat(row: MatchStatRow): PlayerMatchStat | null {
   if (!row.player_id || !playerStatKeys.includes(row.stat_key as PlayerStatKey)) {
     return null;
@@ -373,7 +409,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     { data: teamRows, error: teamError },
     playerResult,
     { data: matchStatRows, error: matchStatError },
-    { data: matchTeamStatsRows, error: matchTeamStatsError }
+    { data: matchTeamStatsRows, error: matchTeamStatsError },
+    { data: officialRows, error: officialError }
   ] = await Promise.all([
     supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
     supabase.from("teams").select("id,tournament_id,name,sport,group_name,logo_url,city,coach,colors").eq("tournament_id", tournamentId).order("name"),
@@ -386,13 +423,15 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase
       .from("match_team_stats")
       .select("tournament_id,match_id,team_id,total_shots,shots_on_target,corners,fouls,possession,yellow_cards,red_cards")
-      .eq("tournament_id", tournamentId)
+      .eq("tournament_id", tournamentId),
+    supabase.from("officials").select("id,tournament_id,name,role,country,city,photo_url").eq("tournament_id", tournamentId).order("name")
   ]);
 
   if (tournamentError) throw tournamentError;
   if (teamError) throw teamError;
   if (matchStatError) throw matchStatError;
   if (matchTeamStatsError && !isMissingRelationError(matchTeamStatsError)) throw matchTeamStatsError;
+  if (officialError && !isMissingRelationError(officialError) && !(officialError.code === "PGRST204" || officialError.code === "42703")) throw officialError;
 
   let playerRows = playerResult.data as PlayerRow[] | null;
   if (playerResult.error && (playerResult.error.code === "PGRST204" || playerResult.error.code === "42703")) {
@@ -426,7 +465,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   const [
     matchResult,
     eventResult,
-    { data: lineupRows, error: lineupError }
+    { data: lineupRows, error: lineupError },
+    { data: matchOfficialRows, error: matchOfficialError }
   ] = await Promise.all([
     supabase
     .from("matches")
@@ -442,6 +482,10 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase
       .from("match_lineups")
       .select("tournament_id,match_id,team_id,player_id,role,x,y,formation")
+      .eq("tournament_id", tournamentId),
+    supabase
+      .from("match_officials")
+      .select("tournament_id,match_id,official_id")
       .eq("tournament_id", tournamentId)
   ]);
 
@@ -460,6 +504,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   }
   if (eventResult.error && !(eventResult.error.code === "PGRST204" || eventResult.error.code === "42703")) throw eventResult.error;
   if (lineupError && !isMissingRelationError(lineupError) && !(lineupError.code === "PGRST204" || lineupError.code === "42703")) throw lineupError;
+  if (matchOfficialError && !isMissingRelationError(matchOfficialError) && !(matchOfficialError.code === "PGRST204" || matchOfficialError.code === "42703")) throw matchOfficialError;
 
   let eventRows = eventResult.data as MatchEventRow[] | null;
   if (eventResult.error && (eventResult.error.code === "PGRST204" || eventResult.error.code === "42703")) {
@@ -490,7 +535,9 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     events: ((eventRows ?? []) as MatchEventRow[]).map(mapMatchEvent),
     matchLineups: lineupError && isMissingRelationError(lineupError) ? [] : ((safeLineupRows ?? []) as MatchLineupRow[]).map(mapMatchLineup),
     playerMatchStats,
-    matchTeamStats: matchTeamStatsError ? [] : ((matchTeamStatsRows ?? []) as MatchTeamStatsRow[]).map(mapMatchTeamStats)
+    matchTeamStats: matchTeamStatsError ? [] : ((matchTeamStatsRows ?? []) as MatchTeamStatsRow[]).map(mapMatchTeamStats),
+    officials: officialError ? [] : ((officialRows ?? []) as OfficialRow[]).map(mapOfficial),
+    matchOfficials: matchOfficialError ? [] : ((matchOfficialRows ?? []) as MatchOfficialRow[]).map(mapMatchOfficial)
   };
 }
 
@@ -706,6 +753,51 @@ export async function deleteSupabasePlayer(playerId: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
 
   const { error } = await supabase.from("players").delete().eq("id", playerId);
+  if (error) throw error;
+}
+
+export async function saveSupabaseOfficial(official: Official, tournamentId = "main-tournament") {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("officials").upsert({
+    id: official.id,
+    tournament_id: official.tournamentId ?? tournamentId,
+    name: official.name,
+    role: official.role,
+    country: official.country || null,
+    city: official.city || null,
+    photo_url: official.photoUrl || null
+  });
+  if (error) throw error;
+}
+
+export async function deleteSupabaseOfficial(officialId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("officials").delete().eq("id", officialId);
+  if (error) throw error;
+}
+
+export async function saveSupabaseMatchOfficials(matchId: string, assignments: MatchOfficialAssignment[], tournamentId = "main-tournament") {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error: deleteError } = await supabase.from("match_officials").delete().eq("match_id", matchId);
+  if (deleteError) throw deleteError;
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase.from("match_officials").insert(
+    assignments.map((assignment) => ({
+      tournament_id: assignment.tournamentId ?? tournamentId,
+      match_id: matchId,
+      official_id: assignment.officialId
+    }))
+  );
   if (error) throw error;
 }
 

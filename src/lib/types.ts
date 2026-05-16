@@ -7,6 +7,8 @@ export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
 export type TournamentSportType = (typeof tournamentSportOptions)[number];
 export const matchPhaseOptions = ["Group Stage", "Quarter Final", "Semi Final", "Final", "3rd Place Match", "Placement Matches"] as const;
 export type MatchPhase = (typeof matchPhaseOptions)[number];
+export const officialRoleOptions = ["referee", "assistant referee", "fourth official", "table official", "commissioner"] as const;
+export type OfficialRole = (typeof officialRoleOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
@@ -147,6 +149,22 @@ export type MatchTeamStats = {
   matchId: string;
   teamId: string;
   stats: Record<MatchTeamStatKey, number>;
+};
+
+export type Official = {
+  id: string;
+  tournamentId?: string;
+  name: string;
+  role: OfficialRole;
+  country?: string;
+  city?: string;
+  photoUrl?: string;
+};
+
+export type MatchOfficialAssignment = {
+  tournamentId?: string;
+  matchId: string;
+  officialId: string;
 };
 
 export type Standing = {

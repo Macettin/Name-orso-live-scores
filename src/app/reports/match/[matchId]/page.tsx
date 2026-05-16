@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { getTeam } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Player, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
+import { playerStatLabels, playerStatsBySport, type MatchEvent, type MatchEventType, type Official, type Player, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
 
 const eventIcons: Record<MatchEventType, string> = {
   goal: "\u26bd",
@@ -136,6 +136,21 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
   );
 }
 
+function OfficialsList({ officials }: { officials: Official[] }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {officials.map((official) => (
+        <div key={official.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <p className="text-xs font-black uppercase tracking-wide text-blue-600">{official.role}</p>
+          <p className="mt-1 font-black text-slate-950">{official.name}</p>
+          <p className="text-sm font-semibold text-slate-500">{[official.city, official.country].filter(Boolean).join(", ") || "Location not set"}</p>
+        </div>
+      ))}
+      {officials.length === 0 ? <p className="text-sm font-semibold text-slate-500">Officials to be confirmed by tournament administration.</p> : null}
+    </div>
+  );
+}
+
 function TeamHeader({ team, label }: { team?: Team; label: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -258,6 +273,10 @@ export default function MatchReportPage() {
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
   const events = data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(first) - minuteSortValue(second));
+  const officials = data.matchOfficials
+    .filter((assignment) => assignment.matchId === match.id)
+    .map((assignment) => data.officials.find((official) => official.id === assignment.officialId))
+    .filter((official): official is Official => Boolean(official));
   const clockLabel = formatMatchClock(match);
 
   return (
@@ -343,6 +362,10 @@ export default function MatchReportPage() {
             <PlayerStatsTable team={home} players={homePlayers} />
             <PlayerStatsTable team={away} players={awayPlayers} />
           </div>
+        </ReportSection>
+
+        <ReportSection title="Match officials">
+          <OfficialsList officials={officials} />
         </ReportSection>
 
         <ReportSection title="Report text">

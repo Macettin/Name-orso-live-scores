@@ -39,7 +39,7 @@ function getFootballMatchTime(match: Match) {
 
 export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
   const teamData = teams ?? [];
-  const lookupData = { tournaments: [], teams: teamData, players: [], matches: [], events: [], matchLineups: [], playerMatchStats: [], matchTeamStats: [] };
+  const lookupData = { tournaments: [], teams: teamData, players: [], matches: [], events: [], matchLineups: [], playerMatchStats: [], matchTeamStats: [], officials: [], matchOfficials: [] };
   const home = getTeam(lookupData, match.homeTeamId);
   const away = getTeam(lookupData, match.awayTeamId);
   const isFootball = match.sport === "Football";

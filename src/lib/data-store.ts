@@ -1,5 +1,5 @@
 import { matchTeamStatKeys } from "./types";
-import type { Match, MatchEvent, MatchLineupEntry, MatchStatus, MatchTeamStats, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament } from "./types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament } from "./types";
 
 export type TournamentData = {
   tournaments: Tournament[];
@@ -10,6 +10,8 @@ export type TournamentData = {
   matchLineups: MatchLineupEntry[];
   playerMatchStats: PlayerMatchStat[];
   matchTeamStats: MatchTeamStats[];
+  officials: Official[];
+  matchOfficials: MatchOfficialAssignment[];
 };
 
 export function slugify(value: string) {
@@ -73,7 +75,9 @@ export function deleteTeam(data: TournamentData, teamId: string): TournamentData
     events: data.events.filter((event) => event.teamId !== teamId && !removedMatchIds.has(event.matchId)),
     matchLineups: data.matchLineups.filter((entry) => entry.teamId !== teamId && !removedMatchIds.has(entry.matchId)),
     playerMatchStats: data.playerMatchStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId)),
-    matchTeamStats: data.matchTeamStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId))
+    matchTeamStats: data.matchTeamStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId)),
+    officials: data.officials,
+    matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId))
   };
 }
 
@@ -111,7 +115,8 @@ export function deleteMatch(data: TournamentData, matchId: string): TournamentDa
     events: data.events.filter((event) => event.matchId !== matchId),
     matchLineups: data.matchLineups.filter((entry) => entry.matchId !== matchId),
     playerMatchStats: data.playerMatchStats.filter((stat) => stat.matchId !== matchId),
-    matchTeamStats: data.matchTeamStats.filter((stat) => stat.matchId !== matchId)
+    matchTeamStats: data.matchTeamStats.filter((stat) => stat.matchId !== matchId),
+    matchOfficials: data.matchOfficials.filter((assignment) => assignment.matchId !== matchId)
   };
 }
 
@@ -209,7 +214,35 @@ export function deleteTournament(data: TournamentData, tournamentId: string): To
     events: data.events.filter((event) => event.tournamentId !== tournamentId),
     matchLineups: data.matchLineups.filter((entry) => entry.tournamentId !== tournamentId),
     playerMatchStats: data.playerMatchStats.filter((stat) => stat.tournamentId !== tournamentId),
-    matchTeamStats: data.matchTeamStats.filter((stat) => stat.tournamentId !== tournamentId)
+    matchTeamStats: data.matchTeamStats.filter((stat) => stat.tournamentId !== tournamentId),
+    officials: data.officials.filter((official) => official.tournamentId !== tournamentId),
+    matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId)
+  };
+}
+
+export function upsertOfficial(data: TournamentData, official: Official): TournamentData {
+  const exists = data.officials.some((item) => item.id === official.id);
+  return {
+    ...data,
+    officials: exists ? data.officials.map((item) => (item.id === official.id ? official : item)) : [...data.officials, official]
+  };
+}
+
+export function deleteOfficial(data: TournamentData, officialId: string): TournamentData {
+  return {
+    ...data,
+    officials: data.officials.filter((official) => official.id !== officialId),
+    matchOfficials: data.matchOfficials.filter((assignment) => assignment.officialId !== officialId)
+  };
+}
+
+export function upsertMatchOfficials(data: TournamentData, matchId: string, assignments: MatchOfficialAssignment[]): TournamentData {
+  return {
+    ...data,
+    matchOfficials: [
+      ...data.matchOfficials.filter((assignment) => assignment.matchId !== matchId),
+      ...assignments
+    ]
   };
 }
 

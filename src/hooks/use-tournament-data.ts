@@ -7,13 +7,16 @@ import {
   deletePlayer,
   deleteTeam,
   deleteTournament,
+  deleteOfficial,
   addPlayerMatchStat,
   upsertMatchTeamStats,
   upsertMatchLineups,
+  upsertMatchOfficials,
   type TournamentData,
   updateMatchScore,
   upsertMatchEvent,
   upsertMatch,
+  upsertOfficial,
   upsertPlayer,
   upsertTeam,
   upsertTournament
@@ -23,6 +26,7 @@ import {
   deleteSupabaseMatch,
   deleteSupabaseMatchEvent,
   deleteSupabasePlayer,
+  deleteSupabaseOfficial,
   deleteSupabaseTeam,
   deleteSupabaseTeamAdminAssignment,
   deleteSupabaseTournament,
@@ -35,7 +39,9 @@ import {
   saveSupabaseMatch,
   saveSupabaseMatchEvent,
   saveSupabaseMatchLineups,
+  saveSupabaseMatchOfficials,
   saveSupabaseMatchTeamStats,
+  saveSupabaseOfficial,
   saveSupabasePlayer,
   saveSupabasePlayerMatchStat,
   saveSupabaseScore,
@@ -46,7 +52,7 @@ import {
   uploadSupabasePlayerPhoto,
   uploadSupabaseTeamLogo
 } from "@/lib/supabase";
-import type { Match, MatchEvent, MatchLineupEntry, MatchStatus, MatchTeamStats, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, UserProfile } from "@/lib/types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, UserProfile } from "@/lib/types";
 
 const emptyTournamentData: TournamentData = {
   tournaments: [],
@@ -56,7 +62,9 @@ const emptyTournamentData: TournamentData = {
   events: [],
   matchLineups: [],
   playerMatchStats: [],
-  matchTeamStats: []
+  matchTeamStats: [],
+  officials: [],
+  matchOfficials: []
 };
 const defaultTournamentId = "main-tournament";
 const selectedTournamentStorageKey = "orso-selected-tournament";
@@ -189,6 +197,8 @@ function useTournamentDataState() {
       .on("postgres_changes", { event: "*", schema: "public", table: "match_stats" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_team_stats" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_lineups" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "officials" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_officials" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "team_admins" }, () => void syncProfile())
@@ -295,6 +305,12 @@ function useTournamentDataState() {
         upsertPlayer(data, { ...player, tournamentId: player.tournamentId ?? selectedTournamentId })
       ),
     removePlayer: (playerId: string) => persist(() => deleteSupabasePlayer(playerId), deletePlayer(data, playerId)),
+    saveOfficial: (official: Official) =>
+      persist(
+        () => saveSupabaseOfficial({ ...official, tournamentId: official.tournamentId ?? selectedTournamentId }, selectedTournamentId),
+        upsertOfficial(data, { ...official, tournamentId: official.tournamentId ?? selectedTournamentId })
+      ),
+    removeOfficial: (officialId: string) => persist(() => deleteSupabaseOfficial(officialId), deleteOfficial(data, officialId)),
     saveMatch: (match: Match) =>
       persist(
         () => saveSupabaseMatch(data, { ...match, tournamentId: match.tournamentId ?? selectedTournamentId }, selectedTournamentId),
@@ -327,6 +343,10 @@ function useTournamentDataState() {
     saveMatchLineups: (entries: MatchLineupEntry[]) => {
       const nextEntries = entries.map((entry) => ({ ...entry, tournamentId: entry.tournamentId ?? selectedTournamentId }));
       return persist(() => saveSupabaseMatchLineups(nextEntries, selectedTournamentId), upsertMatchLineups(data, nextEntries));
+    },
+    saveMatchOfficials: (matchId: string, assignments: MatchOfficialAssignment[]) => {
+      const nextAssignments = assignments.map((assignment) => ({ ...assignment, tournamentId: assignment.tournamentId ?? selectedTournamentId }));
+      return persist(() => saveSupabaseMatchOfficials(matchId, nextAssignments, selectedTournamentId), upsertMatchOfficials(data, matchId, nextAssignments));
     },
     saveEvent: (event: MatchEvent) =>
       persist(

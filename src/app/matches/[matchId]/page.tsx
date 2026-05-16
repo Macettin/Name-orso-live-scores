@@ -12,7 +12,7 @@ import { buildStandings, getMatchTeamStats, getTeam, type TournamentData } from 
 import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
+import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Official, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
 
 type MatchTab = "overview" | "timeline" | "lineups" | "analysis" | "stats" | "standings" | "report";
 
@@ -581,6 +581,29 @@ function MatchSponsorStrip({ tournament, accent }: { tournament?: Tournament; ac
         {tournament?.sponsorLogoUrl ? (
           <span className="relative h-12 w-32 shrink-0 rounded-xl bg-white bg-contain bg-center bg-no-repeat shadow-sm ring-1 ring-white/20" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function OfficialsCard({ officials }: { officials: Official[] }) {
+  if (officials.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-blue-100 bg-white p-4 shadow-[0_16px_40px_rgba(37,99,235,0.08)]">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Match officials</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {officials.map((official) => (
+          <div key={official.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-blue-50 px-3 py-2">
+            {official.photoUrl ? <span className="h-10 w-10 shrink-0 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${official.photoUrl})` }} /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">{official.name.slice(0, 2).toUpperCase()}</span>}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-slate-950">{official.name}</p>
+              <p className="truncate text-xs font-bold capitalize text-blue-700">{official.role}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -1230,6 +1253,10 @@ function ReportTab({
 }) {
   const homeStats = getMatchTeamStats(data, match.id, match.homeTeamId);
   const awayStats = getMatchTeamStats(data, match.id, match.awayTeamId);
+  const officials = data.matchOfficials
+    .filter((assignment) => assignment.matchId === match.id)
+    .map((assignment) => data.officials.find((official) => official.id === assignment.officialId))
+    .filter((official): official is Official => Boolean(official));
 
   return (
     <Panel title="Printable report" eyebrow="PDF style match sheet">
@@ -1294,7 +1321,14 @@ function ReportTab({
           </div>
           <div className="rounded-lg border border-slate-200 p-4">
             <h3 className="font-black text-slate-950">Officials and notes</h3>
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">Officials: To be confirmed by tournament administration.</p>
+            <div className="mt-2 grid gap-2">
+              {officials.map((official) => (
+                <p key={official.id} className="text-sm font-semibold leading-6 text-slate-600">
+                  <span className="font-black capitalize text-slate-950">{official.role}:</span> {official.name}
+                </p>
+              ))}
+              {officials.length === 0 ? <p className="text-sm font-semibold leading-6 text-slate-600">Officials: To be confirmed by tournament administration.</p> : null}
+            </div>
             <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-600">{match.report ?? "Report will be published after the match."}</p>
           </div>
         </div>
@@ -1358,6 +1392,10 @@ export default function MatchPage() {
   const clockLabel = formatMatchClock(match);
   const matchStatusLabel = statusDisplay(match, clockLabel);
   const matchVenueLabel = venueLabel(match.court, match.hallSlug);
+  const assignedOfficials = data.matchOfficials
+    .filter((assignment) => assignment.matchId === match.id)
+    .map((assignment) => data.officials.find((official) => official.id === assignment.officialId))
+    .filter((official): official is Official => Boolean(official));
 
   return (
     <div className="match-center mx-auto grid w-full max-w-7xl gap-4 pb-8 sm:gap-6">
@@ -1443,6 +1481,8 @@ export default function MatchPage() {
       </section>
 
       <MatchSponsorStrip tournament={tournament} accent={accent} />
+
+      <OfficialsCard officials={assignedOfficials} />
 
       <nav className="match-tabs orso-tabbar sticky top-2 z-20 max-w-full backdrop-blur sm:top-20">
         <div className="grid min-w-max grid-cols-7 gap-1 sm:min-w-0">

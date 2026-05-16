@@ -178,6 +178,10 @@ export default function ScoreboardPage() {
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
   const homeGoalEvents = goalEvents.filter((event) => event.teamId === match.homeTeamId);
   const awayGoalEvents = goalEvents.filter((event) => event.teamId === match.awayTeamId);
+  const officials = data.matchOfficials
+    .filter((assignment) => assignment.matchId === match.id)
+    .map((assignment) => data.officials.find((official) => official.id === assignment.officialId))
+    .filter(Boolean);
   const accent = tournament?.primaryColor || "#2563eb";
   const clock = match.status === "Final" ? "90:00" : formatMatchClock(match, match.clockRunning && now ? now : 0);
   const statusLabel = match.status === "Final" ? "Full Time" : match.status;
@@ -243,6 +247,7 @@ export default function ScoreboardPage() {
         <div className="rounded-xl bg-white/10 px-5 py-3 text-left md:text-center">
           <p className="text-sm font-bold uppercase tracking-wide text-white/45">Court / Hall</p>
           <p className="mt-2 whitespace-normal break-words text-2xl font-black">{venueLabel}</p>
+          {officials.length > 0 ? <p className="mt-2 truncate text-sm font-bold text-white/55">Referee: {officials[0]?.name}</p> : null}
         </div>
         <div className="flex justify-start md:justify-end">
           {tournament?.sponsorName || tournament?.sponsorLogoUrl ? (

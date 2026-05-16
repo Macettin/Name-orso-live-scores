@@ -13,6 +13,7 @@ import {
   matchTeamStatKeys,
   matchTeamStatLabels,
   matchPhaseOptions,
+  officialRoleOptions,
   sportOptions,
   tournamentSportOptions,
   type Match,
@@ -23,6 +24,8 @@ import {
   type MatchEventType,
   type MatchPhase,
   type MatchStatus,
+  type Official,
+  type OfficialRole,
   type Player,
   type PlayerStatKey,
   type Sport,
@@ -52,6 +55,7 @@ type PlayerForm = {
   yellow_cards: number;
   red_cards: number;
 };
+type OfficialForm = Pick<Official, "id" | "name" | "role" | "country" | "city" | "photoUrl">;
 type MatchForm = Pick<
   Match,
   "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report" | "phase" | "roundLabel"
@@ -110,6 +114,15 @@ const emptyPlayer: PlayerForm = {
   red_cards: 0
 };
 
+const emptyOfficial: OfficialForm = {
+  id: "",
+  name: "",
+  role: "referee",
+  country: "",
+  city: "",
+  photoUrl: ""
+};
+
 const emptyMatch: MatchForm = {
   id: "",
   homeTeamId: "",
@@ -158,6 +171,7 @@ type AdminSection =
   | "tournaments"
   | "teams"
   | "players"
+  | "officials"
   | "matches"
   | "bracket_phases"
   | "disciplinary"
@@ -174,6 +188,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "tournaments", label: "Tournaments", adminOnly: true },
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
+  { id: "officials", label: "Officials", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
   { id: "bracket_phases", label: "Bracket / Phases", adminOnly: true },
   { id: "disciplinary", label: "Disciplinary", adminOnly: true },
@@ -407,12 +422,15 @@ export function AdminScoreForm() {
     savePlayer,
     uploadPlayerPhoto,
     removePlayer,
+    saveOfficial,
+    removeOfficial,
     saveMatch,
     removeMatch,
     saveScore,
     savePlayerMatchStat,
     saveMatchTeamStats,
     saveMatchLineups,
+    saveMatchOfficials,
     saveEvent,
     removeEvent,
     assignClubAdmin,
@@ -424,6 +442,9 @@ export function AdminScoreForm() {
   const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
   const [playerForm, setPlayerForm] = useState<PlayerForm>(() => ({ ...emptyPlayer, teamId: data.teams[0]?.id ?? "" }));
   const [playerPhotoFile, setPlayerPhotoFile] = useState<File | null>(null);
+  const [officialForm, setOfficialForm] = useState<OfficialForm>(emptyOfficial);
+  const [selectedOfficialsMatchId, setSelectedOfficialsMatchId] = useState(() => data.matches[0]?.id ?? "");
+  const [selectedOfficialIds, setSelectedOfficialIds] = useState<string[]>([]);
   const [matchForm, setMatchForm] = useState<MatchForm>(() => ({
     ...emptyMatch,
     homeTeamId: data.teams[0]?.id ?? "",
@@ -566,6 +587,19 @@ export function AdminScoreForm() {
     // selectedLineupPlayerKey and selectedLineupEntryKey intentionally carry the array contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLineupMatch?.id, selectedLineupTeam?.id, selectedLineupPlayerKey, selectedLineupEntryKey]);
+
+  useEffect(() => {
+    const matchId = selectedOfficialsMatchId || data.matches[0]?.id || "";
+    if (!matchId) {
+      queueMicrotask(() => setSelectedOfficialIds([]));
+      return;
+    }
+
+    queueMicrotask(() => {
+      setSelectedOfficialsMatchId(matchId);
+      setSelectedOfficialIds(data.matchOfficials.filter((assignment) => assignment.matchId === matchId).map((assignment) => assignment.officialId));
+    });
+  }, [data.matchOfficials, data.matches, selectedOfficialsMatchId]);
 
   function adminClockStatus(match?: Match) {
     if (!match) {
@@ -730,6 +764,47 @@ export function AdminScoreForm() {
     setPlayerForm({ ...emptyPlayer, teamId: teamOptions[0]?.id ?? "" });
     setPlayerPhotoFile(null);
     setMessage(`Saved player: ${player.name}`);
+  }
+
+  function submitOfficial(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!officialForm.name.trim()) {
+      return;
+    }
+
+    const official: Official = {
+      id: officialForm.id || createId("official", officialForm.name),
+      name: officialForm.name.trim(),
+      role: officialForm.role,
+      country: officialForm.country?.trim() || undefined,
+      city: officialForm.city?.trim() || undefined,
+      photoUrl: officialForm.photoUrl?.trim() || undefined
+    };
+
+    saveOfficial(official);
+    setOfficialForm(emptyOfficial);
+    setMessage(`Saved official: ${official.name}`);
+  }
+
+  function editOfficial(official: Official) {
+    setOfficialForm({
+      id: official.id,
+      name: official.name,
+      role: official.role,
+      country: official.country ?? "",
+      city: official.city ?? "",
+      photoUrl: official.photoUrl ?? ""
+    });
+  }
+
+  function saveOfficialAssignments() {
+    const matchId = selectedOfficialsMatchId || data.matches[0]?.id;
+    if (!matchId) {
+      return;
+    }
+
+    saveMatchOfficials(matchId, selectedOfficialIds.map((officialId) => ({ matchId, officialId })));
+    setMessage(`Saved ${selectedOfficialIds.length} official${selectedOfficialIds.length === 1 ? "" : "s"} for match.`);
   }
 
   function submitMatch(event: React.FormEvent<HTMLFormElement>) {
@@ -1603,6 +1678,115 @@ export function AdminScoreForm() {
               ))}
               {courtOptions.length === 0 ? <p className="text-sm text-slate-400">No courts available.</p> : null}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className={adminPanelClass("officials")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Officials management", "Create referees and match officials, then assign them to fixtures for public pages and printable reports.")}
+          {officialForm.id ? (
+            <button type="button" onClick={() => setOfficialForm(emptyOfficial)} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <X size={16} aria-hidden="true" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+        <form onSubmit={submitOfficial} className="grid gap-4 md:grid-cols-6">
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Name</span>
+            <input value={officialForm.name} onChange={(event) => setOfficialForm({ ...officialForm, name: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Role</span>
+            <select value={officialForm.role} onChange={(event) => setOfficialForm({ ...officialForm, role: event.target.value as OfficialRole })} className={inputClass()}>
+              {officialRoleOptions.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Country</span>
+            <input value={officialForm.country ?? ""} onChange={(event) => setOfficialForm({ ...officialForm, country: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>City</span>
+            <input value={officialForm.city ?? ""} onChange={(event) => setOfficialForm({ ...officialForm, city: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Photo URL</span>
+            <input value={officialForm.photoUrl ?? ""} onChange={(event) => setOfficialForm({ ...officialForm, photoUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <div className="flex items-end md:col-span-6">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              {officialForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+              {officialForm.id ? "Save official" : "Add official"}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
+          <div className="grid gap-3 md:grid-cols-2">
+            {data.officials.map((official) => (
+              <div key={official.id} className="rounded-lg border border-slate-200 p-4">
+                <p className="font-bold text-slate-900">{official.name}</p>
+                <p className="text-sm font-semibold capitalize text-blue-700">{official.role}</p>
+                <p className="text-sm text-slate-400">{[official.city, official.country].filter(Boolean).join(", ") || "Location not set"}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => editOfficial(official)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                    <Pencil size={14} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => removeOfficial(official.id)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {data.officials.length === 0 ? <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">No officials created yet.</p> : null}
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <h3 className="text-base font-black text-blue-950">Assign officials to match</h3>
+            <label className="mt-3 block">
+              <span className={labelClass()}>Match</span>
+              <select value={selectedOfficialsMatchId || data.matches[0]?.id || ""} onChange={(event) => setSelectedOfficialsMatchId(event.target.value)} className={inputClass()}>
+                {data.matches.map((match) => {
+                  const home = data.teams.find((team) => team.id === match.homeTeamId);
+                  const away = data.teams.find((team) => team.id === match.awayTeamId);
+                  return (
+                    <option key={match.id} value={match.id}>
+                      {home?.name ?? "Home"} vs {away?.name ?? "Away"} / {match.date}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <div className="mt-3 grid gap-2">
+              {data.officials.map((official) => (
+                <label key={official.id} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedOfficialIds.includes(official.id)}
+                    onChange={(event) =>
+                      setSelectedOfficialIds((current) =>
+                        event.target.checked ? [...current, official.id] : current.filter((officialId) => officialId !== official.id)
+                      )
+                    }
+                    className="h-4 w-4"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{official.name}</span>
+                  <span className="shrink-0 capitalize text-blue-700">{official.role}</span>
+                </label>
+              ))}
+            </div>
+            <button type="button" onClick={saveOfficialAssignments} className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              <Save size={16} aria-hidden="true" />
+              Save assignments
+            </button>
           </div>
         </div>
       </section>
