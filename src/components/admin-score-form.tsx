@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, CheckCircle2, Lock, LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Save, Sun, Trash2, Unlock, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -338,16 +338,37 @@ function applicationStatusBadge(status: TournamentApplicationStatus) {
       ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
       : status === "rejected"
         ? "bg-red-100 text-red-700 ring-red-200"
-        : status === "contacted"
+        : status === "contacted" || status === "waiting_for_confirmation"
           ? "bg-blue-100 text-blue-700 ring-blue-200"
           : "bg-slate-100 text-slate-600 ring-slate-200";
 
-  return <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1", className)}>{status}</span>;
+  return <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1", className)}>{status.replace(/_/g, " ")}</span>;
 }
 
 function whatsappHref(phone: string) {
   const digits = phone.replace(/[^\d]/g, "");
   return digits ? `https://wa.me/${digits}` : "";
+}
+
+function applicationFollowUpMessage(application: { nameSurname: string; club: string; ageGroup: string }, tournamentName: string) {
+  return [
+    `Hello ${application.nameSurname},`,
+    "",
+    `Thank you for your interest in joining ${tournamentName}. We received the participation request for ${application.club} (${application.ageGroup}).`,
+    "",
+    "Please confirm your team details and availability so we can continue the registration process.",
+    "",
+    "Orso Live Scores"
+  ].join("\n");
+}
+
+function applicationMailto(email: string, subject: string, body: string) {
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function applicationWhatsappHref(phone: string, message: string) {
+  const base = whatsappHref(phone);
+  return base ? `${base}?text=${encodeURIComponent(message)}` : "";
 }
 
 function periodOptionsForSport(sport: Sport, current?: string) {
@@ -510,7 +531,7 @@ export function AdminScoreForm() {
     saveMatchOfficials,
     saveEvent,
     removeEvent,
-    saveTournamentApplicationStatus,
+    saveTournamentApplicationFollowUp,
     removeTournamentApplication,
     assignClubAdmin,
     removeClubAdminAssignment,
@@ -539,6 +560,10 @@ export function AdminScoreForm() {
   const [clubAdminEmail, setClubAdminEmail] = useState("");
   const [clubAdminTeamId, setClubAdminTeamId] = useState("");
   const [rosterReviewNotes, setRosterReviewNotes] = useState<Record<string, string>>({});
+  const [applicationNotes, setApplicationNotes] = useState<Record<string, string>>({});
+  const [applicationTournamentFilter, setApplicationTournamentFilter] = useState("all");
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState<"all" | TournamentApplicationStatus>("all");
+  const [applicationAgeGroupFilter, setApplicationAgeGroupFilter] = useState("all");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
   const [clockPreviewNow, setClockPreviewNow] = useState(0);
   const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
@@ -571,6 +596,20 @@ export function AdminScoreForm() {
   );
   const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
   const selectedTournamentSport = selectedTournament?.sportType !== "Mixed" ? selectedTournament?.sportType : undefined;
+  const filteredApplications = data.tournamentApplications.filter(
+    (application) =>
+      (applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter) &&
+      (applicationStatusFilter === "all" || application.status === applicationStatusFilter) &&
+      (applicationAgeGroupFilter === "all" || application.ageGroup === applicationAgeGroupFilter)
+  );
+  const applicationAgeGroups = Array.from(
+    new Set(
+      data.tournamentApplications
+        .filter((application) => applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter)
+        .map((application) => application.ageGroup)
+        .filter(Boolean)
+    )
+  ).sort((first, second) => first.localeCompare(second));
   const scoreMatches = data.matches;
   const selectedScoreMatch = scoreMatches.find((match) => match.id === selectedScoreMatchId) ?? scoreMatches[0];
   const selectedPlayerStatMatch = data.matches.find((match) => match.id === selectedPlayerStatMatchId) ?? data.matches[0];
@@ -1349,6 +1388,28 @@ export function AdminScoreForm() {
     });
   }
 
+  async function copyFollowUpMessage(kind: "email" | "WhatsApp", text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage(`${kind} message copied.`);
+    } catch {
+      setMessage("Could not copy message to clipboard.");
+    }
+  }
+
+  function markApplicationContacted(applicationId: string) {
+    void saveTournamentApplicationFollowUp(applicationId, {
+      status: "contacted",
+      lastContactedAt: new Date().toISOString()
+    });
+    setMessage("Application marked as contacted.");
+  }
+
+  function saveApplicationNote(applicationId: string, note: string) {
+    void saveTournamentApplicationFollowUp(applicationId, { adminNote: note });
+    setMessage("Application note saved.");
+  }
+
   return (
     <div className={clsx("admin-dashboard grid gap-6 rounded-2xl transition-colors", adminDarkMode && "admin-dark")}>
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
@@ -1899,14 +1960,54 @@ export function AdminScoreForm() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Tournament applications", "Review public participation requests and track follow-up status.")}
           <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700 ring-1 ring-blue-100">
-            {data.tournamentApplications.filter((application) => application.tournamentId === selectedTournamentId && application.status === "new").length} new
+            {filteredApplications.filter((application) => application.status === "new").length} new
           </span>
         </div>
+        <div className="mb-5 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:grid-cols-3">
+          <label>
+            <span className={labelClass()}>Tournament</span>
+            <select value={applicationTournamentFilter} onChange={(event) => setApplicationTournamentFilter(event.target.value)} className={inputClass()}>
+              <option value="all">All tournaments</option>
+              {data.tournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Status</span>
+            <select value={applicationStatusFilter} onChange={(event) => setApplicationStatusFilter(event.target.value as "all" | TournamentApplicationStatus)} className={inputClass()}>
+              <option value="all">All statuses</option>
+              {tournamentApplicationStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Age group</span>
+            <select value={applicationAgeGroupFilter} onChange={(event) => setApplicationAgeGroupFilter(event.target.value)} className={inputClass()}>
+              <option value="all">All age groups</option>
+              {applicationAgeGroups.map((ageGroup) => (
+                <option key={ageGroup} value={ageGroup}>
+                  {ageGroup}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="grid gap-4">
-          {data.tournamentApplications
-            .filter((application) => application.tournamentId === selectedTournamentId)
+          {filteredApplications
             .map((application) => {
-              const whatsapp = whatsappHref(application.phone);
+              const tournament = data.tournaments.find((item) => item.id === application.tournamentId);
+              const tournamentName = tournament?.name ?? selectedTournament?.name ?? "the tournament";
+              const followUpMessage = applicationFollowUpMessage(application, tournamentName);
+              const emailSubject = `${tournamentName} participation request`;
+              const emailHref = applicationMailto(application.email, emailSubject, followUpMessage);
+              const whatsapp = applicationWhatsappHref(application.phone, followUpMessage);
+              const adminNote = applicationNotes[application.id] ?? application.adminNote ?? "";
               return (
                 <article key={application.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -1919,6 +2020,7 @@ export function AdminScoreForm() {
                         {application.nameSurname} / {application.email} / {application.phone}
                       </p>
                       <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                        <span><strong className="text-slate-900">Tournament:</strong> {tournamentName}</span>
                         <span><strong className="text-slate-900">Players:</strong> {application.estimatedPlayers}</span>
                         <span><strong className="text-slate-900">Age:</strong> {application.ageGroup}</span>
                         <span><strong className="text-slate-900">Staff:</strong> {application.estimatedStaff}</span>
@@ -1926,33 +2028,68 @@ export function AdminScoreForm() {
                         <span><strong className="text-slate-900">Country:</strong> {application.country || "-"}</span>
                         <span><strong className="text-slate-900">City:</strong> {application.city || "-"}</span>
                         <span className="sm:col-span-2"><strong className="text-slate-900">Received:</strong> {application.createdAt ? new Date(application.createdAt).toLocaleString() : "-"}</span>
+                        <span className="sm:col-span-2"><strong className="text-slate-900">Last contacted:</strong> {application.lastContactedAt ? new Date(application.lastContactedAt).toLocaleString() : "-"}</span>
                       </div>
                       {application.notes ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{application.notes}</p> : null}
+                      <div className="mt-3 grid gap-2">
+                        <label>
+                          <span className={labelClass()}>Admin note</span>
+                          <textarea
+                            value={adminNote}
+                            onChange={(event) => setApplicationNotes((current) => ({ ...current, [application.id]: event.target.value }))}
+                            className="mt-2 min-h-20 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            placeholder="Internal follow-up note"
+                          />
+                        </label>
+                        <div>
+                          <button type="button" onClick={() => saveApplicationNote(application.id, adminNote)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                            Save note
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:min-w-56">
                       <select
                         value={application.status}
-                        onChange={(event) => void saveTournamentApplicationStatus(application.id, event.target.value as TournamentApplicationStatus)}
+                        onChange={(event) => void saveTournamentApplicationFollowUp(application.id, { status: event.target.value as TournamentApplicationStatus })}
                         className={inputClass()}
                       >
                         {tournamentApplicationStatusOptions.map((status) => (
                           <option key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                            {status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}
                           </option>
                         ))}
                       </select>
                       <div className="grid grid-cols-2 gap-2">
-                        <a href={`mailto:${application.email}`} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
-                          Email
+                        <button type="button" onClick={() => void copyFollowUpMessage("email", followUpMessage)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
+                          <Copy size={14} aria-hidden="true" />
+                          Copy email
+                        </button>
+                        <button type="button" onClick={() => void copyFollowUpMessage("WhatsApp", followUpMessage)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">
+                          <Copy size={14} aria-hidden="true" />
+                          Copy WA
+                        </button>
+                        <a href={emailHref} className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-50">
+                          <Mail size={14} aria-hidden="true" />
+                          Open email
                         </a>
                         {whatsapp ? (
-                          <a href={whatsapp} target="_blank" rel="noreferrer" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">
+                          <a href={whatsapp} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-50">
+                            <MessageCircle size={14} aria-hidden="true" />
                             WhatsApp
                           </a>
                         ) : (
                           <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm font-black text-slate-300">WhatsApp</span>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => markApplicationContacted(application.id)}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700"
+                      >
+                        <CheckCircle2 size={15} aria-hidden="true" />
+                        Mark as contacted
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -1969,7 +2106,7 @@ export function AdminScoreForm() {
                 </article>
               );
             })}
-          {data.tournamentApplications.filter((application) => application.tournamentId === selectedTournamentId).length === 0 ? (
+          {filteredApplications.length === 0 ? (
             <p className="rounded-lg border border-slate-200 p-4 text-sm font-semibold text-slate-400">No participation requests for this tournament yet.</p>
           ) : null}
         </div>

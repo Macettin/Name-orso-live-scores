@@ -53,6 +53,7 @@ import {
   signInWithEmail,
   signOut,
   submitSupabaseTournamentApplication,
+  updateSupabaseTournamentApplication,
   updateSupabaseTournamentApplicationStatus,
   uploadSupabasePlayerPhoto,
   uploadSupabaseTeamLogo
@@ -374,6 +375,21 @@ function useTournamentDataState() {
       return persist(
         () => updateSupabaseTournamentApplicationStatus(applicationId, status),
         upsertTournamentApplication(data, { ...application, status })
+      );
+    },
+    saveTournamentApplicationFollowUp: (
+      applicationId: string,
+      updates: {
+        status?: TournamentApplicationStatus;
+        adminNote?: string;
+        lastContactedAt?: string;
+      }
+    ) => {
+      const application = data.tournamentApplications.find((item) => item.id === applicationId);
+      if (!application) return Promise.resolve();
+      return persist(
+        () => updateSupabaseTournamentApplication(applicationId, updates),
+        upsertTournamentApplication(data, { ...application, ...updates })
       );
     },
     removeTournamentApplication: (applicationId: string) =>

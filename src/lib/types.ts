@@ -11,7 +11,7 @@ export const officialRoleOptions = ["referee", "assistant referee", "fourth offi
 export type OfficialRole = (typeof officialRoleOptions)[number];
 export const rosterStatusOptions = ["Draft", "Submitted", "Approved", "Needs changes"] as const;
 export type RosterStatus = (typeof rosterStatusOptions)[number];
-export const tournamentApplicationStatusOptions = ["new", "contacted", "accepted", "rejected"] as const;
+export const tournamentApplicationStatusOptions = ["new", "contacted", "waiting_for_confirmation", "accepted", "rejected"] as const;
 export type TournamentApplicationStatus = (typeof tournamentApplicationStatusOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
@@ -89,7 +89,9 @@ export type TournamentApplication = {
   city?: string;
   sport?: string;
   notes?: string;
+  adminNote?: string;
   status: TournamentApplicationStatus;
+  lastContactedAt?: string;
   createdAt?: string;
 };
 
