@@ -1,5 +1,5 @@
 import { matchTeamStatKeys } from "./types";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament } from "./types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
 
 export type TournamentData = {
   tournaments: Tournament[];
@@ -12,6 +12,7 @@ export type TournamentData = {
   matchTeamStats: MatchTeamStats[];
   officials: Official[];
   matchOfficials: MatchOfficialAssignment[];
+  tournamentApplications: TournamentApplication[];
 };
 
 export function slugify(value: string) {
@@ -77,7 +78,8 @@ export function deleteTeam(data: TournamentData, teamId: string): TournamentData
     playerMatchStats: data.playerMatchStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId)),
     matchTeamStats: data.matchTeamStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId)),
     officials: data.officials,
-    matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId))
+    matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId)),
+    tournamentApplications: data.tournamentApplications
   };
 }
 
@@ -216,7 +218,25 @@ export function deleteTournament(data: TournamentData, tournamentId: string): To
     playerMatchStats: data.playerMatchStats.filter((stat) => stat.tournamentId !== tournamentId),
     matchTeamStats: data.matchTeamStats.filter((stat) => stat.tournamentId !== tournamentId),
     officials: data.officials.filter((official) => official.tournamentId !== tournamentId),
-    matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId)
+    matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId),
+    tournamentApplications: data.tournamentApplications.filter((application) => application.tournamentId !== tournamentId)
+  };
+}
+
+export function upsertTournamentApplication(data: TournamentData, application: TournamentApplication): TournamentData {
+  const exists = data.tournamentApplications.some((item) => item.id === application.id);
+  return {
+    ...data,
+    tournamentApplications: exists
+      ? data.tournamentApplications.map((item) => (item.id === application.id ? application : item))
+      : [...data.tournamentApplications, application]
+  };
+}
+
+export function deleteTournamentApplication(data: TournamentData, applicationId: string): TournamentData {
+  return {
+    ...data,
+    tournamentApplications: data.tournamentApplications.filter((application) => application.id !== applicationId)
   };
 }
 

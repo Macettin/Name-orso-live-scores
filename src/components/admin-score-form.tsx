@@ -16,6 +16,7 @@ import {
   officialRoleOptions,
   sportOptions,
   tournamentSportOptions,
+  tournamentApplicationStatusOptions,
   type Match,
   type MatchEvent,
   type MatchLineupEntry,
@@ -31,6 +32,7 @@ import {
   type Sport,
   type Team,
   type Tournament,
+  type TournamentApplicationStatus,
   type TournamentSportType,
   type TournamentStatus
 } from "@/lib/types";
@@ -172,6 +174,7 @@ type AdminSection =
   | "teams"
   | "players"
   | "roster_approvals"
+  | "applications"
   | "officials"
   | "matches"
   | "bracket_phases"
@@ -190,6 +193,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
   { id: "roster_approvals", label: "Roster Approvals", adminOnly: true },
+  { id: "applications", label: "Applications", adminOnly: true },
   { id: "officials", label: "Officials", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
   { id: "bracket_phases", label: "Bracket / Phases", adminOnly: true },
@@ -222,7 +226,7 @@ const adminSectionGroups: {
   {
     title: "Teams & Rosters",
     description: "Manage clubs, players, lineups, and approvals.",
-    sections: ["teams", "players", "lineups", "club_admins", "roster_approvals"]
+    sections: ["teams", "players", "lineups", "club_admins", "roster_approvals", "applications"]
   },
   {
     title: "Match Operations",
@@ -326,6 +330,24 @@ function rosterStatusBadge(team: Team) {
       {status}
     </span>
   );
+}
+
+function applicationStatusBadge(status: TournamentApplicationStatus) {
+  const className =
+    status === "accepted"
+      ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+      : status === "rejected"
+        ? "bg-red-100 text-red-700 ring-red-200"
+        : status === "contacted"
+          ? "bg-blue-100 text-blue-700 ring-blue-200"
+          : "bg-slate-100 text-slate-600 ring-slate-200";
+
+  return <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ring-1", className)}>{status}</span>;
+}
+
+function whatsappHref(phone: string) {
+  const digits = phone.replace(/[^\d]/g, "");
+  return digits ? `https://wa.me/${digits}` : "";
 }
 
 function periodOptionsForSport(sport: Sport, current?: string) {
@@ -488,6 +510,8 @@ export function AdminScoreForm() {
     saveMatchOfficials,
     saveEvent,
     removeEvent,
+    saveTournamentApplicationStatus,
+    removeTournamentApplication,
     assignClubAdmin,
     removeClubAdminAssignment,
     clubAdminAssignments
@@ -1868,6 +1892,86 @@ export function AdminScoreForm() {
             );
           })}
           {rosterApprovalTeams.length === 0 ? <p className="rounded-lg border border-slate-200 p-4 text-sm font-semibold text-slate-400">No teams are available for this tournament.</p> : null}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("applications")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Tournament applications", "Review public participation requests and track follow-up status.")}
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700 ring-1 ring-blue-100">
+            {data.tournamentApplications.filter((application) => application.tournamentId === selectedTournamentId && application.status === "new").length} new
+          </span>
+        </div>
+        <div className="grid gap-4">
+          {data.tournamentApplications
+            .filter((application) => application.tournamentId === selectedTournamentId)
+            .map((application) => {
+              const whatsapp = whatsappHref(application.phone);
+              return (
+                <article key={application.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="break-words text-lg font-black text-slate-950">{application.club}</h3>
+                        {applicationStatusBadge(application.status)}
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        {application.nameSurname} / {application.email} / {application.phone}
+                      </p>
+                      <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                        <span><strong className="text-slate-900">Players:</strong> {application.estimatedPlayers}</span>
+                        <span><strong className="text-slate-900">Age:</strong> {application.ageGroup}</span>
+                        <span><strong className="text-slate-900">Staff:</strong> {application.estimatedStaff}</span>
+                        <span><strong className="text-slate-900">Sport:</strong> {application.sport || "-"}</span>
+                        <span><strong className="text-slate-900">Country:</strong> {application.country || "-"}</span>
+                        <span><strong className="text-slate-900">City:</strong> {application.city || "-"}</span>
+                        <span className="sm:col-span-2"><strong className="text-slate-900">Received:</strong> {application.createdAt ? new Date(application.createdAt).toLocaleString() : "-"}</span>
+                      </div>
+                      {application.notes ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{application.notes}</p> : null}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:min-w-56">
+                      <select
+                        value={application.status}
+                        onChange={(event) => void saveTournamentApplicationStatus(application.id, event.target.value as TournamentApplicationStatus)}
+                        className={inputClass()}
+                      >
+                        {tournamentApplicationStatusOptions.map((status) => (
+                          <option key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a href={`mailto:${application.email}`} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
+                          Email
+                        </a>
+                        {whatsapp ? (
+                          <a href={whatsapp} target="_blank" rel="noreferrer" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">
+                            WhatsApp
+                          </a>
+                        ) : (
+                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm font-black text-slate-300">WhatsApp</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Delete application from ${application.club}?`)) {
+                            void removeTournamentApplication(application.id);
+                          }
+                        }}
+                        className="rounded-lg border border-red-200 px-3 py-2 text-sm font-black text-red-700 hover:bg-red-50"
+                      >
+                        Delete application
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          {data.tournamentApplications.filter((application) => application.tournamentId === selectedTournamentId).length === 0 ? (
+            <p className="rounded-lg border border-slate-200 p-4 text-sm font-semibold text-slate-400">No participation requests for this tournament yet.</p>
+          ) : null}
         </div>
       </section>
 

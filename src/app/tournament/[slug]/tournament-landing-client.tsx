@@ -265,6 +265,7 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
                 <TournamentCta label="Standings" href="/standings" tournamentId={tournament.id} onSelect={setSelectedTournamentId} />
                 <TournamentCta label="Teams" href="/teams" tournamentId={tournament.id} onSelect={setSelectedTournamentId} />
                 <TournamentCta label="Bracket" href={`/tournament/${slug}/bracket`} tournamentId={tournament.id} onSelect={setSelectedTournamentId} />
+                <TournamentCta label="Apply / Join Tournament" href={`/tournament/${slug}/apply`} tournamentId={tournament.id} onSelect={setSelectedTournamentId} />
               </div>
             </div>
 
@@ -392,20 +393,21 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
         </SectionShell>
       ) : null}
 
-      <section className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:grid-cols-5">
+      <section className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:grid-cols-2 lg:grid-cols-6">
         {[
           { icon: Radio, label: "Live Matches", href: "/live" },
           { icon: CalendarDays, label: "Fixtures", href: "/fixtures" },
           { icon: Trophy, label: "Standings", href: "/standings" },
           { icon: Users, label: "Teams", href: "/teams" },
-          { icon: GitBranch, label: "Bracket", href: `/tournament/${slug}/bracket` }
+          { icon: GitBranch, label: "Bracket", href: `/tournament/${slug}/bracket` },
+          { icon: Shield, label: "Apply", href: `/tournament/${slug}/apply` }
         ].map((item) => (
           <button key={item.label} type="button" onClick={() => openSection(item.href)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-600 hover:text-white">
             <item.icon size={17} />
             {item.label}
           </button>
         ))}
-        <Link href="/tournaments" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-100 px-3 py-2 text-sm font-black text-blue-700 sm:col-span-5">
+        <Link href="/tournaments" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-100 px-3 py-2 text-sm font-black text-blue-700 sm:col-span-2 lg:col-span-6">
           <Shield size={17} />
           Tournament directory
           <ExternalLink size={15} />
