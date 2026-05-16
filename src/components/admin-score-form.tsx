@@ -203,6 +203,40 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "reports", label: "Reports", adminOnly: true }
 ];
 
+const adminSectionGroups: {
+  title: string;
+  description: string;
+  sections: AdminSection[];
+  links?: { label: string; href: string }[];
+}[] = [
+  {
+    title: "Overview",
+    description: "Dashboard summary and quick actions.",
+    sections: ["overview"]
+  },
+  {
+    title: "Tournament Setup",
+    description: "Build the event structure before matchday.",
+    sections: ["tournaments", "fixture_builder", "bracket_phases"]
+  },
+  {
+    title: "Teams & Rosters",
+    description: "Manage clubs, players, lineups, and approvals.",
+    sections: ["teams", "players", "lineups", "club_admins", "roster_approvals"]
+  },
+  {
+    title: "Match Operations",
+    description: "Run fixtures, live scoring, stats, and officials.",
+    sections: ["matches", "live_scoring", "timeline", "match_stats", "officials", "disciplinary"]
+  },
+  {
+    title: "Reports & Media",
+    description: "Printable outputs, QR sharing, and match sheets.",
+    sections: ["reports"],
+    links: [{ label: "QR Print", href: "/qr-print" }]
+  }
+];
+
 const adminDarkModeStorageKey = "orso-admin-dark-mode";
 const lineupFormations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3"] as const;
 type LineupFormation = (typeof lineupFormations)[number];
@@ -569,6 +603,7 @@ export function AdminScoreForm() {
     : 0;
   const substitutionLimitReached = selectedSubstitutionMatch?.sport === "Football" && substitutionCount >= 5;
   const visibleAdminSections = adminSections.filter((section) => (section.adminOnly ? canManageAll : true) && (section.scorer ? canScore : true));
+  const activeAdminSectionLabel = adminSections.find((section) => section.id === activeAdminSection)?.label ?? "Overview";
 
   function adminPanelClass(section: AdminSection, tone: "default" | "blue" = "default") {
     return clsx(
@@ -1323,20 +1358,61 @@ export function AdminScoreForm() {
             {adminDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           </button>
         </div>
-        <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          {visibleAdminSections.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => setActiveAdminSection(section.id)}
-              className={clsx(
-                "rounded-xl px-3 py-2.5 text-left text-sm font-black transition",
-                activeAdminSection === section.id ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" : "bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-700"
-              )}
-            >
-              {section.label}
-            </button>
-          ))}
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
+          Active workflow: <span className="text-blue-950">{activeAdminSectionLabel}</span>
+        </div>
+        <nav className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3" aria-label="Admin workflow navigation">
+          {adminSectionGroups.map((group) => {
+            const groupSections = group.sections
+              .map((sectionId) => visibleAdminSections.find((section) => section.id === sectionId))
+              .filter((section): section is (typeof visibleAdminSections)[number] => Boolean(section));
+            const groupLinks = group.links?.filter((link) => canManageAll || link.href !== "/qr-print") ?? [];
+            const hasActiveSection = group.sections.includes(activeAdminSection);
+
+            if (groupSections.length === 0 && groupLinks.length === 0) {
+              return null;
+            }
+
+            return (
+              <div
+                key={group.title}
+                className={clsx(
+                  "rounded-2xl border p-3 transition",
+                  hasActiveSection ? "border-blue-300 bg-blue-50 shadow-[0_16px_34px_rgba(37,99,235,0.12)]" : "border-slate-200 bg-white"
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-slate-950">{group.title}</h3>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{group.description}</p>
+                  </div>
+                  {hasActiveSection ? <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-wide text-white">Active</span> : null}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {groupSections.map((section) => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => setActiveAdminSection(section.id)}
+                      className={clsx(
+                        "min-h-10 rounded-xl px-3 py-2 text-left text-sm font-black transition",
+                        activeAdminSection === section.id
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20"
+                          : "bg-slate-50 text-slate-600 hover:bg-blue-100 hover:text-blue-800"
+                      )}
+                    >
+                      {section.label}
+                    </button>
+                  ))}
+                  {groupLinks.map((link) => (
+                    <Link key={link.href} href={link.href} className="inline-flex min-h-10 items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
       </section>
 
