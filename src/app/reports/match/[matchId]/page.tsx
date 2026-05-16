@@ -282,9 +282,14 @@ export default function MatchReportPage() {
   return (
     <main className="report-page mx-auto max-w-5xl bg-white p-4 text-slate-950 sm:p-6">
       <div className="print-hidden mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/matches/${match.id}`} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
-          Back to match
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/matches/${match.id}`} className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
+            Back to match
+          </Link>
+          <Link href={`/reports/match-sheet/${match.id}`} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+            Pre-match sheet
+          </Link>
+        </div>
         <PrintButton />
       </div>
 

@@ -627,6 +627,13 @@ export default function MatchConsolePage() {
                   </span>
                   <ExternalLink size={20} />
                 </Link>
+                <Link href={`/reports/match-sheet/${match.id}`} className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-left font-black transition hover:bg-white/15">
+                  <span>
+                    <span className="block text-xs uppercase tracking-[0.18em] text-blue-100/70">Print</span>
+                    <span className="mt-1 block text-base">Match sheet</span>
+                  </span>
+                  <ExternalLink size={20} />
+                </Link>
               </div>
             </div>
 

@@ -1275,6 +1275,10 @@ function ReportTab({
             <FileText size={16} />
             Open print report
           </Link>
+          <Link href={`/reports/match-sheet/${match.id}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100">
+            <FileText size={16} />
+            Pre-match sheet
+          </Link>
         </div>
 
         <div className="my-5 grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
@@ -1414,6 +1418,9 @@ export default function MatchPage() {
           <LiveUpdateIndicator lastUpdatedAt={lastUpdatedAt} />
           <Link href={`/reports/match/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto">
             Match report
+          </Link>
+          <Link href={`/reports/match-sheet/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 sm:w-auto">
+            Match sheet
           </Link>
           <Link href={`/scoreboard/${match.id}`} className="inline-flex w-full items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 sm:w-auto">
             Open scoreboard
