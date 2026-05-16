@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId } from "@/lib/data-store";
+import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold } from "@/lib/disciplinary";
 import { playerStatKeys, type Player, type Team } from "@/lib/types";
 import { PageHeader, TeamLogo } from "@/components/ui";
 
@@ -281,6 +282,7 @@ export default function ClubAdminPage() {
   const [rosterPreviewRows, setRosterPreviewRows] = useState<RosterPreviewRow[]>([]);
   const [rosterImportSaving, setRosterImportSaving] = useState(false);
   const [message, setMessage] = useState("Manage your assigned team details and roster.");
+  const [yellowSuspensionThreshold] = useState(readYellowCardSuspensionThreshold);
 
   const assignedTeams = useMemo(
     () => data.teams.filter((team) => clubAdminTeamIds.includes(team.id) && (!team.tournamentId || team.tournamentId === selectedTournamentId)),
@@ -298,6 +300,7 @@ export default function ClubAdminPage() {
           colors: selectedTeam?.colors ?? ""
         };
   const roster = selectedTeam ? data.players.filter((player) => player.teamId === selectedTeam.id) : [];
+  const disciplinaryTableRows = disciplinaryRows({ players: roster, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
   const rosterImportReadyRows = rosterPreviewRows.filter((row) => row.status === "ready");
 
   useEffect(() => {
@@ -687,7 +690,9 @@ export default function ClubAdminPage() {
                 </div>
               </div>
               <div className="mt-5 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {roster.map((player) => (
+                {roster.map((player) => {
+                  const disciplinaryRow = disciplinaryRowForPlayer(player, disciplinaryTableRows);
+                  return (
                   <div key={player.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                     <div className="flex min-w-0 items-center gap-3">
                       <PlayerAvatar player={player} />
@@ -696,6 +701,7 @@ export default function ClubAdminPage() {
                           #{player.number} {player.name}
                         </p>
                         <p className="text-sm text-slate-400">{player.position || "Player"}</p>
+                        {disciplinaryRow?.isSuspended ? <p className="mt-1 text-xs font-black text-red-600">Suspended for {disciplinaryRow.matchesSuspended} match{disciplinaryRow.matchesSuspended === 1 ? "" : "es"}</p> : null}
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -709,7 +715,8 @@ export default function ClubAdminPage() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {roster.length === 0 ? <p className="p-4 text-sm text-slate-400">No players are listed for this team yet.</p> : null}
               </div>
             </section>

@@ -8,6 +8,7 @@ import { ArrowLeft, Clock3, ExternalLink, Flag, Pause, Play, RotateCcw, ShieldAl
 import { TeamLogo } from "@/components/ui";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId, getMatchTeamStats, getTeam } from "@/lib/data-store";
+import { disciplinaryRows, readYellowCardSuspensionThreshold } from "@/lib/disciplinary";
 import { formatMatchClock, getClockStateForAction } from "@/lib/match-clock";
 import type { Match, MatchEvent, MatchLineupEntry, MatchLineupRole, MatchTeamStatKey, Player, PlayerStatKey, Team } from "@/lib/types";
 
@@ -164,7 +165,8 @@ function TeamPanel({
   selectedPlayerId,
   pendingOut,
   onPlayerClick,
-  onScoreDelta
+  onScoreDelta,
+  suspendedPlayerIds
 }: {
   team?: Team;
   players: Player[];
@@ -175,6 +177,7 @@ function TeamPanel({
   pendingOut?: { teamId: string; player: Player };
   onPlayerClick: (player: Player) => void;
   onScoreDelta: (delta: number) => void;
+  suspendedPlayerIds: Set<string>;
 }) {
   const playersIn = new Set(substitutionEvents.map((event) => event.playerInId).filter(Boolean));
   const playersOut = new Set(substitutionEvents.map((event) => event.playerOutId ?? event.playerId).filter(Boolean));
@@ -211,6 +214,7 @@ function TeamPanel({
         {orderedPlayers.map((player) => {
           const role = roleForPlayer(player, entries);
           const status = playersIn.has(player.id) ? "IN" : playersOut.has(player.id) ? "OUT" : "";
+          const suspended = suspendedPlayerIds.has(player.id);
           return (
             <button
               key={player.id}
@@ -234,6 +238,7 @@ function TeamPanel({
                     {roleLabel(role)}
                   </span>
                   {status ? <span className={clsx("rounded-full px-2 py-0.5 text-[0.65rem] font-black", status === "IN" ? "bg-emerald-600 text-white" : "bg-red-600 text-white")}>{status}</span> : null}
+                  {suspended ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[0.65rem] font-black text-red-700">Suspended</span> : null}
                 </div>
               </div>
             </button>
@@ -331,6 +336,7 @@ export default function MatchConsolePage() {
   const [minute, setMinute] = useState("");
   const [assistPlayerId, setAssistPlayerId] = useState("");
   const [pendingOut, setPendingOut] = useState<{ teamId: string; player: Player } | null>(null);
+  const [yellowSuspensionThreshold] = useState(readYellowCardSuspensionThreshold);
 
   const match = useMemo(() => data.matches.find((item) => item.id === params.matchId), [data.matches, params.matchId]);
   const homeTeam = match ? getTeam(data, match.homeTeamId) : undefined;
@@ -341,6 +347,8 @@ export default function MatchConsolePage() {
   const homeLineups = matchLineups.filter((entry) => entry.teamId === match?.homeTeamId);
   const awayLineups = matchLineups.filter((entry) => entry.teamId === match?.awayTeamId);
   const matchEvents = match ? data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(second) - minuteSortValue(first)) : [];
+  const disciplineRows = disciplinaryRows({ players: [...homePlayers, ...awayPlayers], teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
+  const suspendedPlayerIds = new Set(disciplineRows.filter((row) => row.isSuspended).map((row) => row.player.id));
   const substitutionEvents = matchEvents.filter((event) => event.type === "substitution");
   const teamsById = new Map(data.teams.map((team) => [team.id, team]));
   const playersById = new Map(data.players.map((player) => [player.id, player]));
@@ -666,6 +674,7 @@ export default function MatchConsolePage() {
             pendingOut={pendingOut ?? undefined}
             onPlayerClick={handlePlayerClick}
             onScoreDelta={(delta) => updateScore(delta, 0)}
+            suspendedPlayerIds={suspendedPlayerIds}
           />
           <TeamPanel
             team={awayTeam}
@@ -677,6 +686,7 @@ export default function MatchConsolePage() {
             pendingOut={pendingOut ?? undefined}
             onPlayerClick={handlePlayerClick}
             onScoreDelta={(delta) => updateScore(0, delta)}
+            suspendedPlayerIds={suspendedPlayerIds}
           />
         </div>
 
@@ -716,6 +726,7 @@ export default function MatchConsolePage() {
           </div>
 
           {substitutionLimitReached ? <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{selectedTeam?.name ?? "Team"} already used 5 substitutions.</p> : null}
+          {suspendedPlayerIds.has(selectedPlayer.id) ? <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">This player is currently suspended by tournament disciplinary rules.</p> : null}
 
           {activeAction ? (
             <div className="mt-4 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end">

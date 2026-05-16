@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { LogOut, Moon, Pencil, Plus, Save, Sun, Trash2, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
+import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
 import {
   playerStatLabels,
@@ -159,6 +160,7 @@ type AdminSection =
   | "players"
   | "matches"
   | "bracket_phases"
+  | "disciplinary"
   | "lineups"
   | "live_scoring"
   | "timeline"
@@ -174,6 +176,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "players", label: "Players", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
   { id: "bracket_phases", label: "Bracket / Phases", adminOnly: true },
+  { id: "disciplinary", label: "Disciplinary", adminOnly: true },
   { id: "lineups", label: "Lineups", scorer: true },
   { id: "live_scoring", label: "Live Scoring", scorer: true },
   { id: "timeline", label: "Timeline Events", adminOnly: true },
@@ -445,6 +448,7 @@ export function AdminScoreForm() {
   const [lineupPositions, setLineupPositions] = useState<Record<string, LineupPosition>>({});
   const [selectedPitchPlayerId, setSelectedPitchPlayerId] = useState("");
   const [swapPlayerId, setSwapPlayerId] = useState("");
+  const [yellowSuspensionThreshold, setYellowSuspensionThreshold] = useState(readYellowCardSuspensionThreshold);
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
   const courtOptions = useMemo(
@@ -469,6 +473,7 @@ export function AdminScoreForm() {
   const selectedLineupEntries = selectedLineupMatch && selectedLineupTeam
     ? data.matchLineups.filter((entry) => entry.matchId === selectedLineupMatch.id && entry.teamId === selectedLineupTeam.id)
     : [];
+  const disciplinaryTableRows = disciplinaryRows({ players: data.players, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
   const selectedLineupPlayerKey = selectedLineupPlayers.map((player) => player.id).join(":");
   const selectedLineupEntryKey = selectedLineupEntries.map((entry) => `${entry.playerId}:${entry.role}:${entry.x ?? ""}:${entry.y ?? ""}:${entry.formation ?? ""}`).join("|");
   const selectedPlayerStatMatchTeams = selectedPlayerStatMatch
@@ -1826,6 +1831,62 @@ export function AdminScoreForm() {
         </div>
       </section>
 
+      <section className={adminPanelClass("disciplinary")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Disciplinary tracking", "Cards are calculated from match events. Red card suspends automatically; yellow card accumulation can be adjusted for this operator device.")}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="min-w-48">
+              <span className={labelClass()}>Yellow suspension rule</span>
+              <input
+                type="number"
+                min={1}
+                value={yellowSuspensionThreshold}
+                onChange={(event) => {
+                  const next = Math.max(1, Number(event.target.value) || 1);
+                  setYellowSuspensionThreshold(next);
+                  window.localStorage.setItem(yellowCardSuspensionThresholdStorageKey, String(next));
+                }}
+                className={inputClass()}
+              />
+            </label>
+            <Link href="/disciplinary" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700">
+              Open public table
+            </Link>
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Player</th>
+                <th className="px-4 py-3">Team</th>
+                <th className="px-4 py-3 text-center">Yellow</th>
+                <th className="px-4 py-3 text-center">Red</th>
+                <th className="px-4 py-3">Suspension</th>
+                <th className="px-4 py-3">Next eligible</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {disciplinaryTableRows.map((row) => (
+                <tr key={row.player.id}>
+                  <td className="px-4 py-3 font-black text-slate-950">#{row.player.number} {row.player.name}</td>
+                  <td className="px-4 py-3 font-bold text-slate-600">{row.team?.name ?? "Team"}</td>
+                  <td className="px-4 py-3 text-center font-black text-yellow-700">{row.yellowCards}</td>
+                  <td className="px-4 py-3 text-center font-black text-red-700">{row.redCards}</td>
+                  <td className="px-4 py-3">
+                    <span className={clsx("rounded-full px-3 py-1 text-xs font-black", row.isSuspended ? "bg-red-600 text-white" : "bg-emerald-50 text-emerald-700")}>
+                      {row.isSuspended ? `Suspended ${row.matchesSuspended}` : "Eligible"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-bold text-slate-600">{row.nextEligibleMatch ? `${row.nextEligibleMatch.date} ${row.nextEligibleMatch.time}` : "Not scheduled"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {disciplinaryTableRows.length === 0 ? <p className="p-4 text-sm font-bold text-slate-500">No cards have been recorded yet.</p> : null}
+        </div>
+      </section>
+
       <section className={adminPanelClass("lineups")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Match lineup management", "Set match-day Starting XI, substitutes, and reserves per football fixture. These roles power the public Lineups tab.")}
@@ -1912,11 +1973,14 @@ export function AdminScoreForm() {
                 <div className="grid content-start gap-3">
                   {[...selectedLineupPlayers]
                     .sort((first, second) => roleRank(lineupRoleForPlayer(first.id)) - roleRank(lineupRoleForPlayer(second.id)) || first.number - second.number || first.name.localeCompare(second.name))
-                    .map((player) => (
-                      <div key={player.id} className={clsx("grid gap-3 rounded-lg border bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-center", selectedPitchPlayerId === player.id ? "border-blue-500 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : "border-slate-200")}>
+                    .map((player) => {
+                      const disciplinaryRow = disciplinaryRowForPlayer(player, disciplinaryTableRows);
+                      return (
+                      <div key={player.id} className={clsx("grid gap-3 rounded-lg border bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-center", selectedPitchPlayerId === player.id ? "border-blue-500 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : disciplinaryRow?.isSuspended ? "border-red-200" : "border-slate-200")}>
                         <button type="button" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", player.id)} onClick={() => setSelectedPitchPlayerId(player.id)} className="min-w-0 text-left">
                           <p className="font-black text-slate-950">#{player.number} {player.name}</p>
                           <p className="text-sm font-semibold text-slate-500">{player.position || "Player"}</p>
+                          {disciplinaryRow?.isSuspended ? <p className="mt-1 text-xs font-black text-red-600">Suspended for {disciplinaryRow.matchesSuspended} match{disciplinaryRow.matchesSuspended === 1 ? "" : "es"}</p> : null}
                           {lineupPositions[player.id] ? <p className="mt-1 text-xs font-black text-blue-600">x {Math.round(lineupPositions[player.id].x)} / y {Math.round(lineupPositions[player.id].y)}</p> : null}
                         </button>
                         <select value={lineupRoleForPlayer(player.id)} onChange={(event) => setLineupRole(player.id, event.target.value as MatchLineupRole)} className="orso-input mt-0 min-w-48">
@@ -1925,7 +1989,8 @@ export function AdminScoreForm() {
                           <option value="reserve">Reserve / Not in squad</option>
                         </select>
                       </div>
-                    ))}
+                      );
+                    })}
                   {selectedLineupPlayers.length === 0 ? <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">No players available for this team.</p> : null}
                 </div>
               </div>
