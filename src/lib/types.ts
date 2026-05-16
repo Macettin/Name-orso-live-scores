@@ -78,6 +78,7 @@ export type Team = {
 export type TournamentApplication = {
   id: string;
   tournamentId: string;
+  teamId?: string;
   nameSurname: string;
   club: string;
   phone: string;

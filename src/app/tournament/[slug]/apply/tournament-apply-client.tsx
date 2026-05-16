@@ -47,6 +47,18 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+async function notifyTournamentApplication(application: TournamentApplication, tournamentName: string) {
+  const response = await fetch("/api/tournament-applications/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ application, tournamentName })
+  });
+
+  if (!response.ok) {
+    throw new Error("Application notification email failed.");
+  }
+}
+
 export default function TournamentApplyClient({ slug }: { slug?: string }) {
   const { data, selectedTournamentId, setSelectedTournamentId, submitTournamentApplication } = useTournamentData();
   const [form, setForm] = useState<ApplicationForm>(emptyForm);
@@ -116,6 +128,11 @@ export default function TournamentApplyClient({ slug }: { slug?: string }) {
     setMessage("");
     try {
       await submitTournamentApplication(application);
+      try {
+        await notifyTournamentApplication(application, tournament.name);
+      } catch {
+        // Email notification is best-effort; the application has already been saved.
+      }
       setSubmitted(true);
       setForm(emptyForm);
     } catch (error) {

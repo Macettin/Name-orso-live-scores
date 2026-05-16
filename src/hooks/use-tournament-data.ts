@@ -381,6 +381,7 @@ function useTournamentDataState() {
       applicationId: string,
       updates: {
         status?: TournamentApplicationStatus;
+        teamId?: string;
         adminNote?: string;
         lastContactedAt?: string;
       }

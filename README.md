@@ -25,6 +25,16 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
+To email Orso Sports Events when a public tournament application is submitted, add Resend server-side email settings:
+
+```bash
+RESEND_API_KEY=your-resend-api-key
+APPLICATION_NOTIFICATION_TO_EMAIL=eren.yildirim@outlook.com
+APPLICATION_NOTIFICATION_FROM_EMAIL="Orso Sports Events <notifications@your-domain.com>"
+```
+
+`RESEND_API_KEY` and `APPLICATION_NOTIFICATION_FROM_EMAIL` must stay server-only. Do not prefix them with `NEXT_PUBLIC_`. If email is not configured or delivery fails, tournament applications are still saved and applicants still see the success message.
+
 7. Restart the dev server:
 
 ```bash

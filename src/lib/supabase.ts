@@ -196,6 +196,7 @@ type MatchOfficialRow = {
 type TournamentApplicationRow = {
   id: string;
   tournament_id: string;
+  team_id?: string | null;
   name_surname: string;
   club: string;
   phone: string;
@@ -396,6 +397,7 @@ function mapTournamentApplication(row: TournamentApplicationRow): TournamentAppl
   return {
     id: row.id,
     tournamentId: row.tournament_id,
+    teamId: row.team_id ?? undefined,
     nameSurname: row.name_surname,
     club: row.club,
     phone: row.phone,
@@ -484,7 +486,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase.from("officials").select("id,tournament_id,name,role,country,city,photo_url").eq("tournament_id", tournamentId).order("name"),
     supabase
       .from("tournament_applications")
-      .select("id,tournament_id,name_surname,club,phone,email,estimated_players,age_group,estimated_staff,country,city,sport,notes,admin_note,status,last_contacted_at,created_at")
+      .select("id,tournament_id,team_id,name_surname,club,phone,email,estimated_players,age_group,estimated_staff,country,city,sport,notes,admin_note,status,last_contacted_at,created_at")
       .order("created_at", { ascending: false })
   ]);
 
@@ -1168,6 +1170,7 @@ export async function updateSupabaseTournamentApplication(
   applicationId: string,
   updates: {
     status?: TournamentApplicationStatus;
+    teamId?: string;
     adminNote?: string;
     lastContactedAt?: string;
   }
@@ -1177,6 +1180,7 @@ export async function updateSupabaseTournamentApplication(
 
   const payload: Record<string, string | null> = {};
   if (updates.status) payload.status = updates.status;
+  if ("teamId" in updates) payload.team_id = updates.teamId || null;
   if ("adminNote" in updates) payload.admin_note = updates.adminNote?.trim() || null;
   if ("lastContactedAt" in updates) payload.last_contacted_at = updates.lastContactedAt || null;
 

@@ -32,6 +32,7 @@ import {
   type Sport,
   type Team,
   type Tournament,
+  type TournamentApplication,
   type TournamentApplicationStatus,
   type TournamentSportType,
   type TournamentStatus
@@ -694,6 +695,19 @@ export function AdminScoreForm() {
     const interval = window.setInterval(() => setClockPreviewNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [selectedScoreMatch?.id, selectedScoreMatch?.clockRunning, selectedScoreMatch?.clockStartedAt]);
+
+  useEffect(() => {
+    function applyHashSection() {
+      const hashSection = window.location.hash.replace("#", "");
+      if (adminSections.some((section) => section.id === hashSection)) {
+        setActiveAdminSection(hashSection as AdminSection);
+      }
+    }
+
+    applyHashSection();
+    window.addEventListener("hashchange", applyHashSection);
+    return () => window.removeEventListener("hashchange", applyHashSection);
+  }, []);
 
   useEffect(() => {
     const nextFormation = (selectedLineupEntries.find((entry) => entry.formation)?.formation ?? "4-3-3") as LineupFormation;
@@ -1410,6 +1424,57 @@ export function AdminScoreForm() {
     setMessage("Application note saved.");
   }
 
+  async function createTeamFromApplication(application: TournamentApplication) {
+    const teamName = application.club.trim();
+    if (!teamName) {
+      setMessage("Application club name is required before creating a team.");
+      return;
+    }
+
+    const duplicate = data.teams.find(
+      (team) =>
+        (team.tournamentId === application.tournamentId || (!team.tournamentId && application.tournamentId === selectedTournamentId)) &&
+        team.name.trim().toLowerCase() === teamName.toLowerCase()
+    );
+    if (duplicate) {
+      setMessage(`A team named ${duplicate.name} already exists in this tournament.`);
+      return;
+    }
+
+    const tournament = data.tournaments.find((item) => item.id === application.tournamentId) ?? selectedTournament;
+    const applicationSport = sportOptions.find((sport) => sport.toLowerCase() === (application.sport ?? "").trim().toLowerCase());
+    const tournamentSport = tournament?.sportType && tournament.sportType !== "Mixed" ? tournament.sportType : undefined;
+    const teamId = createId("team", `${application.tournamentId}-${teamName}`);
+    const createdNote = application.adminNote?.trim()
+      ? `${application.adminNote.trim()}\nTeam created from application`
+      : "Team created from application";
+
+    try {
+      await saveTeam({
+        id: teamId,
+        tournamentId: application.tournamentId,
+        name: teamName,
+        sport: (applicationSport ?? tournamentSport ?? selectedTournamentSport ?? "Football") as Sport,
+        group: application.ageGroup || "Group A",
+        logoUrl: "",
+        city: application.city ?? "",
+        coach: application.nameSurname,
+        colors: "",
+        rosterStatus: "Draft",
+        rosterLocked: false
+      });
+      await saveTournamentApplicationFollowUp(application.id, {
+        status: "accepted",
+        teamId,
+        adminNote: createdNote
+      });
+      setApplicationNotes((current) => ({ ...current, [application.id]: createdNote }));
+      setMessage(`${teamName} created and application accepted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not create team from application.");
+    }
+  }
+
   return (
     <div className={clsx("admin-dashboard grid gap-6 rounded-2xl transition-colors", adminDarkMode && "admin-dark")}>
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
@@ -2008,6 +2073,7 @@ export function AdminScoreForm() {
               const emailHref = applicationMailto(application.email, emailSubject, followUpMessage);
               const whatsapp = applicationWhatsappHref(application.phone, followUpMessage);
               const adminNote = applicationNotes[application.id] ?? application.adminNote ?? "";
+              const assignedTeam = application.teamId ? data.teams.find((team) => team.id === application.teamId) : undefined;
               return (
                 <article key={application.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -2029,6 +2095,9 @@ export function AdminScoreForm() {
                         <span><strong className="text-slate-900">City:</strong> {application.city || "-"}</span>
                         <span className="sm:col-span-2"><strong className="text-slate-900">Received:</strong> {application.createdAt ? new Date(application.createdAt).toLocaleString() : "-"}</span>
                         <span className="sm:col-span-2"><strong className="text-slate-900">Last contacted:</strong> {application.lastContactedAt ? new Date(application.lastContactedAt).toLocaleString() : "-"}</span>
+                        <span className="sm:col-span-2">
+                          <strong className="text-slate-900">Assigned team:</strong> {assignedTeam?.name ?? application.teamId ?? "-"}
+                        </span>
                       </div>
                       {application.notes ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{application.notes}</p> : null}
                       <div className="mt-3 grid gap-2">
@@ -2089,6 +2158,15 @@ export function AdminScoreForm() {
                       >
                         <CheckCircle2 size={15} aria-hidden="true" />
                         Mark as contacted
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void createTeamFromApplication(application)}
+                        disabled={Boolean(application.teamId)}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <Plus size={15} aria-hidden="true" />
+                        {application.teamId ? "Team linked" : "Create Team from Application"}
                       </button>
                       <button
                         type="button"
