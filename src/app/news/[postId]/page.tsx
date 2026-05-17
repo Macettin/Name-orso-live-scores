@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import NewsDetailClient from "./news-detail-client";
 
 export const metadata: Metadata = {
-  title: "News | Orso Live Scores",
+  title: "News | Orso Sports Hub",
   description: "Tournament news, announcements, results, and media updates."
 };
 

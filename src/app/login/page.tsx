@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <PageHeader title="Login" description="Sign in as an admin, scorer, or club admin to manage Orso Live Scores." />
+      <PageHeader title="Login" description="Sign in as an admin, scorer, or club admin to manage Orso Sports Hub." />
       <section className="max-w-xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         {!supabaseEnabled ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">

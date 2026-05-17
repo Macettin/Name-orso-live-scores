@@ -440,7 +440,7 @@ function applicationFollowUpMessage(application: { nameSurname: string; club: st
     "",
     "Please confirm your team details and availability so we can continue the registration process.",
     "",
-    "Orso Live Scores"
+    "Orso Sports Hub"
   ].join("\n");
 }
 

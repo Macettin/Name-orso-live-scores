@@ -1,4 +1,4 @@
-# Orso Live Scores
+# Orso Sports Hub
 
 A Next.js TypeScript app for volleyball and basketball tournament fixtures, live scores, teams, players, match reports, admin management, and QR-ready court pages.
 

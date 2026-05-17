@@ -4,8 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { TournamentDataProvider } from "@/hooks/use-tournament-data";
 
 export const metadata: Metadata = {
-  title: "Orso Live Scores",
-  description: "Live volleyball and basketball tournament scores, fixtures, standings, and reports.",
+  title: "Orso Sports Hub",
+  description: "Your digital sports event platform.",
   icons: {
     icon: [
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },

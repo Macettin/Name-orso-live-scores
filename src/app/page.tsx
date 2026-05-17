@@ -67,9 +67,9 @@ export default function Home() {
               <div className="inline-flex max-w-full items-center rounded-full border border-white/20 bg-white/12 px-3 py-1.5 text-sm font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
                 <span className="min-w-0 whitespace-normal break-words">{tournament?.name ?? "Tournament dashboard"}</span>
               </div>
-              <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">Orso Live Scores</h1>
+              <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">Orso Sports Hub</h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-blue-50/90">
-                A premium live tournament hub for fixtures, scoreboards, standings, team profiles, player stats, match reports, and court QR pages.
+                Your digital sports event platform for fixtures, scoreboards, standings, team profiles, player stats, match reports, media, and court QR pages.
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 {heroChips.map((chip) => (

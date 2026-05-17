@@ -47,9 +47,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Image src="/orso-logo.png" alt="Orso Sports Events" width={64} height={64} className="h-11 w-11 shrink-0 object-contain sm:h-16 sm:w-16" priority />
               <span className="min-w-0">
                 <Link href="/" className="block truncate text-lg font-black leading-tight tracking-tight text-slate-900 transition hover:text-blue-700 sm:text-2xl">
-                  Orso Live Scores
+                  Orso Sports Hub
                 </Link>
-                <span className="block truncate text-xs font-semibold text-slate-600 sm:text-sm">Orso Sports Events</span>
+                <span className="block truncate text-xs font-semibold text-slate-600 sm:text-sm">Your digital sports event platform.</span>
                 <a
                   href="https://www.orsosportsevents.com"
                   target="_blank"
@@ -131,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Orso Sports Events
               </a>
             </p>
-            <p className="text-xs font-semibold text-slate-400">Live scoring &amp; tournament management platform</p>
+            <p className="text-xs font-semibold text-slate-400">Your digital sports event platform.</p>
           </div>
         </footer>
       ) : null}

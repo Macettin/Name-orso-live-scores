@@ -11,7 +11,7 @@ function titleFromSlug(slug: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const title = `${titleFromSlug(slug) || "Tournament"} | Orso Live Scores`;
+  const title = `${titleFromSlug(slug) || "Tournament"} | Orso Sports Hub`;
   const description = "Live tournament hub with fixtures, standings, teams, top scorers, livestreams, and match updates.";
 
   return {
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       title,
       description,
       type: "website",
-      images: [{ url: "/orso-logo.png", width: 1200, height: 630, alt: "Orso Live Scores" }]
+      images: [{ url: "/orso-logo.png", width: 1200, height: 630, alt: "Orso Sports Hub" }]
     },
     twitter: {
       card: "summary_large_image",
