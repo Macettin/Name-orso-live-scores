@@ -363,6 +363,22 @@ function applicationFollowUpMessage(application: { nameSurname: string; club: st
   ].join("\n");
 }
 
+function clubAdminInviteMessage(application: { nameSurname: string; club: string }, tournamentName: string, teamName: string, loginUrl: string) {
+  return [
+    `Hello ${application.nameSurname},`,
+    "",
+    `${application.club} has been accepted for ${tournamentName}, and your team profile has been created as ${teamName}.`,
+    "",
+    "You can manage your team profile, roster, player photos, and roster submission from the Orso club admin area.",
+    "",
+    `Login link: ${loginUrl}`,
+    "",
+    "If you do not have an account yet, our admin team will create your Supabase Auth user first. After that, use this same email address to sign in.",
+    "",
+    "Orso Sports Events"
+  ].join("\n");
+}
+
 function applicationMailto(email: string, subject: string, body: string) {
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -565,6 +581,7 @@ export function AdminScoreForm() {
   const [applicationTournamentFilter, setApplicationTournamentFilter] = useState("all");
   const [applicationStatusFilter, setApplicationStatusFilter] = useState<"all" | TournamentApplicationStatus>("all");
   const [applicationAgeGroupFilter, setApplicationAgeGroupFilter] = useState("all");
+  const [applicationCountryFilter, setApplicationCountryFilter] = useState("all");
   const [message, setMessage] = useState("CMS data syncs to the shared tournament store.");
   const [clockPreviewNow, setClockPreviewNow] = useState(0);
   const [activeAdminSection, setActiveAdminSection] = useState<AdminSection>("overview");
@@ -601,7 +618,8 @@ export function AdminScoreForm() {
     (application) =>
       (applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter) &&
       (applicationStatusFilter === "all" || application.status === applicationStatusFilter) &&
-      (applicationAgeGroupFilter === "all" || application.ageGroup === applicationAgeGroupFilter)
+      (applicationAgeGroupFilter === "all" || application.ageGroup === applicationAgeGroupFilter) &&
+      (applicationCountryFilter === "all" || application.country === applicationCountryFilter)
   );
   const applicationAgeGroups = Array.from(
     new Set(
@@ -609,6 +627,14 @@ export function AdminScoreForm() {
         .filter((application) => applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter)
         .map((application) => application.ageGroup)
         .filter(Boolean)
+    )
+  ).sort((first, second) => first.localeCompare(second));
+  const applicationCountries = Array.from(
+    new Set(
+      data.tournamentApplications
+        .filter((application) => applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter)
+        .map((application) => application.country)
+        .filter((country): country is string => Boolean(country))
     )
   ).sort((first, second) => first.localeCompare(second));
   const scoreMatches = data.matches;
@@ -1402,7 +1428,7 @@ export function AdminScoreForm() {
     });
   }
 
-  async function copyFollowUpMessage(kind: "email" | "WhatsApp", text: string) {
+  async function copyFollowUpMessage(kind: string, text: string) {
     try {
       await navigator.clipboard.writeText(text);
       setMessage(`${kind} message copied.`);
@@ -1472,6 +1498,32 @@ export function AdminScoreForm() {
       setMessage(`${teamName} created and application accepted.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create team from application.");
+    }
+  }
+
+  async function inviteClubAdminFromApplication(application: TournamentApplication) {
+    if (!application.teamId) {
+      setMessage("Create a team from this application before inviting a club admin.");
+      return;
+    }
+
+    const email = application.email.trim();
+    if (!email) {
+      setMessage("Application email is required before inviting a club admin.");
+      return;
+    }
+
+    try {
+      await assignClubAdmin(email, application.teamId);
+      const team = data.teams.find((item) => item.id === application.teamId);
+      setMessage(`Assigned ${email} as club admin for ${team?.name ?? "team"}.`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Could not assign club admin.";
+      if (errorMessage.toLowerCase().includes("no profile found")) {
+        setMessage(`No Supabase Auth user/profile found for ${email}. Create the user in Supabase Auth, then click Invite Club Admin again. Use the prepared login email from this card for instructions.`);
+        return;
+      }
+      setMessage(errorMessage);
     }
   }
 
@@ -2028,7 +2080,7 @@ export function AdminScoreForm() {
             {filteredApplications.filter((application) => application.status === "new").length} new
           </span>
         </div>
-        <div className="mb-5 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:grid-cols-3">
+        <div className="mb-5 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:grid-cols-2 xl:grid-cols-4">
           <label>
             <span className={labelClass()}>Tournament</span>
             <select value={applicationTournamentFilter} onChange={(event) => setApplicationTournamentFilter(event.target.value)} className={inputClass()}>
@@ -2062,9 +2114,25 @@ export function AdminScoreForm() {
               ))}
             </select>
           </label>
+          <label>
+            <span className={labelClass()}>Country</span>
+            <select value={applicationCountryFilter} onChange={(event) => setApplicationCountryFilter(event.target.value)} className={inputClass()}>
+              <option value="all">All countries</option>
+              {applicationCountries.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="grid gap-4">
           {filteredApplications
+            .sort((first, second) => {
+              const firstTime = first.createdAt ? new Date(first.createdAt).getTime() : 0;
+              const secondTime = second.createdAt ? new Date(second.createdAt).getTime() : 0;
+              return secondTime - firstTime || second.id.localeCompare(first.id);
+            })
             .map((application) => {
               const tournament = data.tournaments.find((item) => item.id === application.tournamentId);
               const tournamentName = tournament?.name ?? selectedTournament?.name ?? "the tournament";
@@ -2074,50 +2142,89 @@ export function AdminScoreForm() {
               const whatsapp = applicationWhatsappHref(application.phone, followUpMessage);
               const adminNote = applicationNotes[application.id] ?? application.adminNote ?? "";
               const assignedTeam = application.teamId ? data.teams.find((team) => team.id === application.teamId) : undefined;
+              const assignedClubAdmin = assignedTeam
+                ? clubAdminAssignments.find((assignment) => assignment.teamId === assignedTeam.id && assignment.email?.toLowerCase() === application.email.toLowerCase())
+                : undefined;
+              const canInviteClubAdmin = application.status === "accepted" && Boolean(application.teamId);
+              const clubAdminInviteText = assignedTeam
+                ? clubAdminInviteMessage(application, tournamentName, assignedTeam.name, "/login")
+                : "";
+              const clubAdminInviteHref = assignedTeam ? applicationMailto(application.email, `${tournamentName} roster access`, clubAdminInviteText) : "";
               return (
-                <article key={application.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="break-words text-lg font-black text-slate-950">{application.club}</h3>
+                <article key={application.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                    <div className="min-w-0 space-y-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">{tournamentName}</p>
+                          <h3 className="mt-1 break-words text-xl font-black text-slate-950">{application.club}</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            {application.createdAt ? new Date(application.createdAt).toLocaleString() : "Received date unavailable"}
+                          </p>
+                        </div>
                         {applicationStatusBadge(application.status)}
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {application.nameSurname} / {application.email} / {application.phone}
-                      </p>
-                      <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                        <span><strong className="text-slate-900">Tournament:</strong> {tournamentName}</span>
-                        <span><strong className="text-slate-900">Players:</strong> {application.estimatedPlayers}</span>
-                        <span><strong className="text-slate-900">Age:</strong> {application.ageGroup}</span>
-                        <span><strong className="text-slate-900">Staff:</strong> {application.estimatedStaff}</span>
-                        <span><strong className="text-slate-900">Sport:</strong> {application.sport || "-"}</span>
-                        <span><strong className="text-slate-900">Country:</strong> {application.country || "-"}</span>
-                        <span><strong className="text-slate-900">City:</strong> {application.city || "-"}</span>
-                        <span className="sm:col-span-2"><strong className="text-slate-900">Received:</strong> {application.createdAt ? new Date(application.createdAt).toLocaleString() : "-"}</span>
-                        <span className="sm:col-span-2"><strong className="text-slate-900">Last contacted:</strong> {application.lastContactedAt ? new Date(application.lastContactedAt).toLocaleString() : "-"}</span>
-                        <span className="sm:col-span-2">
-                          <strong className="text-slate-900">Assigned team:</strong> {assignedTeam?.name ?? application.teamId ?? "-"}
-                        </span>
+
+                      <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Contact</p>
+                          <p className="mt-1 font-black text-slate-900">{application.nameSurname}</p>
+                          <p className="break-all text-xs font-semibold text-slate-500">{application.email}</p>
+                          <p className="text-xs font-semibold text-slate-500">{application.phone}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Squad</p>
+                          <p className="mt-1 font-black text-slate-900">{application.estimatedPlayers} players</p>
+                          <p className="text-xs font-semibold text-slate-500">{application.estimatedStaff} staff</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Age group</p>
+                          <p className="mt-1 font-black text-slate-900">{application.ageGroup}</p>
+                          <p className="text-xs font-semibold text-slate-500">{application.sport || "Sport not set"}</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Location</p>
+                          <p className="mt-1 font-black text-slate-900">{[application.country, application.city].filter(Boolean).join(", ") || "-"}</p>
+                          <p className="text-xs font-semibold text-slate-500">{application.lastContactedAt ? `Contacted ${new Date(application.lastContactedAt).toLocaleDateString()}` : "Not contacted"}</p>
+                        </div>
                       </div>
-                      {application.notes ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{application.notes}</p> : null}
-                      <div className="mt-3 grid gap-2">
-                        <label>
-                          <span className={labelClass()}>Admin note</span>
+
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+                        <div className="rounded-xl border border-slate-100 bg-white p-3">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Applicant message</p>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{application.notes || "No message provided."}</p>
+                        </div>
+                        <label className="rounded-xl border border-slate-100 bg-white p-3">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-400">Admin note</span>
                           <textarea
                             value={adminNote}
                             onChange={(event) => setApplicationNotes((current) => ({ ...current, [application.id]: event.target.value }))}
-                            className="mt-2 min-h-20 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                             placeholder="Internal follow-up note"
                           />
-                        </label>
-                        <div>
-                          <button type="button" onClick={() => saveApplicationNote(application.id, adminNote)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                          <button type="button" onClick={() => saveApplicationNote(application.id, adminNote)} className="mt-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
                             Save note
                           </button>
-                        </div>
+                        </label>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-xs font-black">
+                        {assignedTeam ? (
+                          <Link href={`/teams/${assignedTeam.id}`} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700 hover:bg-emerald-100">
+                            Team: {assignedTeam.name}
+                          </Link>
+                        ) : application.teamId ? (
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-500">Team linked</span>
+                        ) : null}
+                        {assignedClubAdmin ? (
+                          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">Club admin: {assignedClubAdmin.email ?? "Assigned"}</span>
+                        ) : application.teamId ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">Club admin not invited</span>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 sm:min-w-56">
+
+                    <div className="grid content-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
                       <select
                         value={application.status}
                         onChange={(event) => void saveTournamentApplicationFollowUp(application.id, { status: event.target.value as TournamentApplicationStatus })}
@@ -2129,32 +2236,28 @@ export function AdminScoreForm() {
                           </option>
                         ))}
                       </select>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => void copyFollowUpMessage("email", followUpMessage)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
-                          <Copy size={14} aria-hidden="true" />
-                          Copy email
-                        </button>
-                        <button type="button" onClick={() => void copyFollowUpMessage("WhatsApp", followUpMessage)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">
-                          <Copy size={14} aria-hidden="true" />
-                          Copy WA
-                        </button>
-                        <a href={emailHref} className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-50">
-                          <Mail size={14} aria-hidden="true" />
-                          Open email
-                        </a>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
                         {whatsapp ? (
-                          <a href={whatsapp} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-50">
+                          <a href={whatsapp} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-50">
                             <MessageCircle size={14} aria-hidden="true" />
                             WhatsApp
                           </a>
                         ) : (
-                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm font-black text-slate-300">WhatsApp</span>
+                          <span className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm font-black text-slate-300">WhatsApp</span>
                         )}
+                        <a href={emailHref} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-50">
+                          <Mail size={14} aria-hidden="true" />
+                          Email
+                        </a>
+                        <button type="button" onClick={() => void copyFollowUpMessage("message", followUpMessage)} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
+                          <Copy size={14} aria-hidden="true" />
+                          Copy message
+                        </button>
                       </div>
                       <button
                         type="button"
                         onClick={() => markApplicationContacted(application.id)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700"
                       >
                         <CheckCircle2 size={15} aria-hidden="true" />
                         Mark as contacted
@@ -2163,11 +2266,38 @@ export function AdminScoreForm() {
                         type="button"
                         onClick={() => void createTeamFromApplication(application)}
                         disabled={Boolean(application.teamId)}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                       >
                         <Plus size={15} aria-hidden="true" />
-                        {application.teamId ? "Team linked" : "Create Team from Application"}
+                        {application.teamId ? "Team linked" : "Create Team"}
                       </button>
+                      {canInviteClubAdmin ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void inviteClubAdminFromApplication(application)}
+                            disabled={Boolean(assignedClubAdmin)}
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            <Lock size={15} aria-hidden="true" />
+                            {assignedClubAdmin ? "Club Admin Invited" : "Invite Club Admin"}
+                          </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void copyFollowUpMessage("club admin email", clubAdminInviteText)}
+                              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm font-black text-slate-700 hover:bg-slate-50"
+                            >
+                              <Copy size={14} aria-hidden="true" />
+                              Copy invite
+                            </button>
+                            <a href={clubAdminInviteHref} className="inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-sm font-black text-slate-700 hover:bg-slate-50">
+                              <Mail size={14} aria-hidden="true" />
+                              Email invite
+                            </a>
+                          </div>
+                        </>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => {
@@ -2175,7 +2305,7 @@ export function AdminScoreForm() {
                             void removeTournamentApplication(application.id);
                           }
                         }}
-                        className="rounded-lg border border-red-200 px-3 py-2 text-sm font-black text-red-700 hover:bg-red-50"
+                        className="min-h-11 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 hover:bg-red-50"
                       >
                         Delete application
                       </button>
