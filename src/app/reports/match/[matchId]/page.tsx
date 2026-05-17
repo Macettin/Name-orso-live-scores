@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { activeSponsorsForTournament, SponsorStrip } from "@/components/sponsor-strip";
+import { TeamStaffList } from "@/components/team-staff-list";
 import { getTeam } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
@@ -270,8 +272,11 @@ export default function MatchReportPage() {
   const home = getTeam(data, match.homeTeamId);
   const away = getTeam(data, match.awayTeamId);
   const tournament = data.tournaments.find((item) => item.id === match.tournamentId);
+  const activeSponsors = activeSponsorsForTournament(data.sponsors, match.tournamentId);
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
+  const homeStaff = data.teamStaff.filter((staff) => staff.teamId === match.homeTeamId);
+  const awayStaff = data.teamStaff.filter((staff) => staff.teamId === match.awayTeamId);
   const events = data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(first) - minuteSortValue(second));
   const officials = data.matchOfficials
     .filter((assignment) => assignment.matchId === match.id)
@@ -311,6 +316,8 @@ export default function MatchReportPage() {
           </div>
         </header>
 
+        <SponsorStrip sponsors={activeSponsors} title="Match sponsors" compact printable />
+
         <section className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
             <TeamHeader team={home} label="Home" />
@@ -321,6 +328,11 @@ export default function MatchReportPage() {
               <TeamHeader team={away} label="Away" />
             </div>
           </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <TeamStaffList staff={homeStaff} title={`${home?.name ?? "Home"} staff`} compact />
+          <TeamStaffList staff={awayStaff} title={`${away?.name ?? "Away"} staff`} compact />
         </section>
 
         <ReportSection title="Goal and event timeline">

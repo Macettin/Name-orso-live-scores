@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, CheckCircle2, Copy, Eye, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
-import { createId, getMatchTeamStats } from "@/lib/data-store";
+import { AlertCircle, Bell, CheckCircle2, Copy, Eye, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { createId, getMatchTeamStats, type TournamentData } from "@/lib/data-store";
 import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -17,7 +17,9 @@ import {
   mediaTypeOptions,
   newsCategoryOptions,
   officialRoleOptions,
+  sponsorTierOptions,
   sportOptions,
+  teamStaffRoleOptions,
   tournamentSportOptions,
   tournamentApplicationStatusOptions,
   type Match,
@@ -37,7 +39,11 @@ import {
   type Player,
   type PlayerStatKey,
   type Sport,
+  type Sponsor,
+  type SponsorTier,
   type Team,
+  type TeamStaff,
+  type TeamStaffRole,
   type Tournament,
   type TournamentApplication,
   type TournamentApplicationStatus,
@@ -80,6 +86,10 @@ type MediaItemForm = Pick<MediaItem, "id" | "title" | "type" | "publishedAt" | "
   videoUrl: string;
   caption: string;
 };
+type SponsorForm = Pick<Sponsor, "id" | "name" | "logoUrl" | "websiteUrl" | "tier" | "isActive"> & {
+  tournamentId: string;
+};
+type TeamStaffForm = Pick<TeamStaff, "id" | "teamId" | "name" | "role" | "phone" | "email" | "photoUrl">;
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
 type SubstitutionForm = {
   matchId: string;
@@ -186,6 +196,26 @@ const emptyMediaItem: MediaItemForm = {
   isPublished: true
 };
 
+const emptySponsor: SponsorForm = {
+  id: "",
+  name: "",
+  logoUrl: "",
+  websiteUrl: "",
+  tier: "Partner",
+  tournamentId: "",
+  isActive: true
+};
+
+const emptyTeamStaff: TeamStaffForm = {
+  id: "",
+  teamId: "",
+  name: "",
+  role: "Head Coach",
+  phone: "",
+  email: "",
+  photoUrl: ""
+};
+
 const emptyEvent: EventForm = {
   matchId: "",
   teamId: "",
@@ -211,10 +241,12 @@ const periodOptionsBySport: Record<Sport, string[]> = {
 
 type AdminSection =
   | "overview"
+  | "notifications"
   | "tournaments"
   | "teams"
   | "players"
   | "roster_approvals"
+  | "team_staff"
   | "applications"
   | "officials"
   | "matches"
@@ -228,14 +260,17 @@ type AdminSection =
   | "club_admins"
   | "news"
   | "media_gallery"
+  | "sponsors"
   | "reports";
 
 const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminOnly?: boolean }[] = [
   { id: "overview", label: "Overview" },
+  { id: "notifications", label: "Notifications", adminOnly: true },
   { id: "tournaments", label: "Tournaments", adminOnly: true },
   { id: "teams", label: "Teams", adminOnly: true },
   { id: "players", label: "Players", adminOnly: true },
   { id: "roster_approvals", label: "Roster Approvals", adminOnly: true },
+  { id: "team_staff", label: "Team Staff", adminOnly: true },
   { id: "applications", label: "Applications", adminOnly: true },
   { id: "officials", label: "Officials", adminOnly: true },
   { id: "matches", label: "Matches", adminOnly: true },
@@ -249,6 +284,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "club_admins", label: "Club Admins", adminOnly: true },
   { id: "news", label: "News / Announcements", adminOnly: true },
   { id: "media_gallery", label: "Media Gallery", adminOnly: true },
+  { id: "sponsors", label: "Sponsors", adminOnly: true },
   { id: "reports", label: "Reports", adminOnly: true }
 ];
 
@@ -261,7 +297,7 @@ const adminSectionGroups: {
   {
     title: "Overview",
     description: "Dashboard summary and quick actions.",
-    sections: ["overview"]
+    sections: ["overview", "notifications"]
   },
   {
     title: "Tournament Setup",
@@ -271,7 +307,7 @@ const adminSectionGroups: {
   {
     title: "Teams & Rosters",
     description: "Manage clubs, players, lineups, and approvals.",
-    sections: ["teams", "players", "lineups", "club_admins", "roster_approvals", "applications"]
+    sections: ["teams", "players", "team_staff", "lineups", "club_admins", "roster_approvals", "applications"]
   },
   {
     title: "Match Operations",
@@ -281,7 +317,7 @@ const adminSectionGroups: {
   {
     title: "Reports & Media",
     description: "News publishing, printable outputs, QR sharing, and match sheets.",
-    sections: ["news", "media_gallery", "reports"],
+    sections: ["news", "media_gallery", "sponsors", "reports"],
     links: [{ label: "QR Print", href: "/qr-print" }]
   }
 ];
@@ -425,6 +461,142 @@ function clubAdminInviteMessage(application: { nameSurname: string; club: string
 
 function applicationMailto(email: string, subject: string, body: string) {
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+type AdminNotificationTone = "blue" | "amber" | "red" | "emerald" | "slate";
+type AdminNotification = {
+  key: string;
+  type: "application" | "roster_submitted" | "roster_needs_changes" | "disciplinary" | "fixture_conflict" | "match_completed";
+  title: string;
+  detail: string;
+  href: string;
+  createdAt: string;
+  tone: AdminNotificationTone;
+};
+
+function formatAdminNotificationTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value || "Now";
+  }
+  return date.toLocaleString();
+}
+
+function teamName(data: TournamentData, teamId: string) {
+  return data.teams.find((team) => team.id === teamId)?.name ?? "Team";
+}
+
+function matchLabel(data: TournamentData, match: Match) {
+  return `${teamName(data, match.homeTeamId)} vs ${teamName(data, match.awayTeamId)}`;
+}
+
+function buildFixtureConflictNotifications(data: TournamentData, selectedTournamentId: string): AdminNotification[] {
+  const conflicts = new Map<string, AdminNotification>();
+  const tournamentMatches = data.matches.filter((match) => !match.tournamentId || match.tournamentId === selectedTournamentId);
+
+  tournamentMatches.forEach((match, index) => {
+    tournamentMatches.slice(index + 1).forEach((other) => {
+      if (match.id === other.id || match.date !== other.date || match.time !== other.time) {
+        return;
+      }
+
+      const sameCourt = match.court.trim().toLowerCase() === other.court.trim().toLowerCase();
+      const sameTeam =
+        match.homeTeamId === other.homeTeamId ||
+        match.homeTeamId === other.awayTeamId ||
+        match.awayTeamId === other.homeTeamId ||
+        match.awayTeamId === other.awayTeamId;
+
+      if (!sameCourt && !sameTeam) {
+        return;
+      }
+
+      const conflictType = sameCourt ? "court" : "team";
+      const ids = [match.id, other.id].sort().join("-");
+      const key = `fixture_conflict:${conflictType}:${match.date}:${match.time}:${ids}`;
+
+      conflicts.set(key, {
+        key,
+        type: "fixture_conflict",
+        title: sameCourt ? "Fixture conflict: court double-booked" : "Fixture conflict: team double-booked",
+        detail: `${match.date} ${match.time} - ${sameCourt ? match.court : `${matchLabel(data, match)} / ${matchLabel(data, other)}`}`,
+        href: "#matches",
+        createdAt: `${match.date}T${match.time || "00:00"}`,
+        tone: "amber"
+      });
+    });
+  });
+
+  return Array.from(conflicts.values());
+}
+
+function buildAdminNotifications(data: TournamentData, selectedTournamentId: string, yellowThreshold: number): AdminNotification[] {
+  const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
+  const tournamentName = selectedTournament?.name ?? "selected tournament";
+  const currentTeams = data.teams.filter((team) => !team.tournamentId || team.tournamentId === selectedTournamentId);
+  const currentMatches = data.matches.filter((match) => !match.tournamentId || match.tournamentId === selectedTournamentId);
+  const disciplineRows = disciplinaryRows({ players: data.players, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold });
+
+  const notifications: AdminNotification[] = [
+    ...data.tournamentApplications
+      .filter((application) => application.status === "new")
+      .map((application) => ({
+        key: `application:new:${application.id}`,
+        type: "application" as const,
+        title: "New tournament application",
+        detail: `${application.club} applied for ${data.tournaments.find((tournament) => tournament.id === application.tournamentId)?.name ?? application.tournamentId}.`,
+        href: "#applications",
+        createdAt: application.createdAt ?? new Date().toISOString(),
+        tone: "blue" as const
+      })),
+    ...currentTeams
+      .filter((team) => team.rosterStatus === "Submitted")
+      .map((team) => ({
+        key: `roster_submitted:${team.id}:${team.rosterSubmittedAt ?? "submitted"}`,
+        type: "roster_submitted" as const,
+        title: "Roster submitted",
+        detail: `${team.name} submitted a roster for review.`,
+        href: "#roster_approvals",
+        createdAt: team.rosterSubmittedAt ?? new Date().toISOString(),
+        tone: "blue" as const
+      })),
+    ...currentTeams
+      .filter((team) => team.rosterStatus === "Needs changes")
+      .map((team) => ({
+        key: `roster_needs_changes:${team.id}:${team.rosterNote ?? "needs_changes"}`,
+        type: "roster_needs_changes" as const,
+        title: "Roster needs changes",
+        detail: `${team.name} has roster changes requested${team.rosterNote ? `: ${team.rosterNote}` : "."}`,
+        href: "#roster_approvals",
+        createdAt: team.rosterSubmittedAt ?? new Date().toISOString(),
+        tone: "amber" as const
+      })),
+    ...disciplineRows
+      .filter((row) => row.isSuspended)
+      .map((row) => ({
+        key: `disciplinary:suspension:${row.player.id}:${row.matchesSuspended}`,
+        type: "disciplinary" as const,
+        title: "Disciplinary suspension",
+        detail: `${row.player.name} (${row.team?.name ?? "Team"}) is suspended for ${row.matchesSuspended} match${row.matchesSuspended === 1 ? "" : "es"}.`,
+        href: "#disciplinary",
+        createdAt: new Date().toISOString(),
+        tone: "red" as const
+      })),
+    ...buildFixtureConflictNotifications(data, selectedTournamentId),
+    ...currentMatches
+      .filter((match) => match.status === "Final")
+      .map((match) => ({
+        key: `match_completed:${match.id}:${match.homeScore}-${match.awayScore}`,
+        type: "match_completed" as const,
+        title: "Match completed",
+        detail: `${matchLabel(data, match)} finished ${match.homeScore}-${match.awayScore} in ${tournamentName}.`,
+        href: "#reports",
+        createdAt: `${match.date}T${match.time || "00:00"}`,
+        tone: "emerald" as const
+      }))
+  ];
+
+  return notifications.sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
 }
 
 function printRosterPreview({
@@ -676,6 +848,11 @@ export function AdminScoreForm() {
     removeNewsPost,
     saveMediaItem,
     removeMediaItem,
+    saveSponsor,
+    removeSponsor,
+    saveTeamStaff,
+    removeTeamStaff,
+    markAdminNotificationRead,
     assignClubAdmin,
     removeClubAdminAssignment,
     clubAdminAssignments
@@ -695,6 +872,8 @@ export function AdminScoreForm() {
   }));
   const [newsPostForm, setNewsPostForm] = useState<NewsPostForm>(() => ({ ...emptyNewsPost }));
   const [mediaItemForm, setMediaItemForm] = useState<MediaItemForm>(() => ({ ...emptyMediaItem }));
+  const [sponsorForm, setSponsorForm] = useState<SponsorForm>(emptySponsor);
+  const [teamStaffForm, setTeamStaffForm] = useState<TeamStaffForm>(() => ({ ...emptyTeamStaff, teamId: data.teams[0]?.id ?? "" }));
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedTeamStatsMatchId, setSelectedTeamStatsMatchId] = useState(() => data.matches[0]?.id ?? "");
@@ -779,6 +958,15 @@ export function AdminScoreForm() {
     ? data.matchLineups.filter((entry) => entry.matchId === selectedLineupMatch.id && entry.teamId === selectedLineupTeam.id)
     : [];
   const disciplinaryTableRows = disciplinaryRows({ players: data.players, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
+  const adminNotifications = useMemo(
+    () => buildAdminNotifications(data, selectedTournamentId, yellowSuspensionThreshold),
+    [data, selectedTournamentId, yellowSuspensionThreshold]
+  );
+  const readNotificationKeys = useMemo(
+    () => new Set(data.adminNotificationReads.filter((read) => read.userId === profile?.id).map((read) => read.notificationKey)),
+    [data.adminNotificationReads, profile?.id]
+  );
+  const unreadNotifications = adminNotifications.filter((notification) => !readNotificationKeys.has(notification.key));
   const selectedLineupPlayerKey = selectedLineupPlayers.map((player) => player.id).join(":");
   const selectedLineupEntryKey = selectedLineupEntries.map((entry) => `${entry.playerId}:${entry.role}:${entry.x ?? ""}:${entry.y ?? ""}:${entry.formation ?? ""}`).join("|");
   const selectedPlayerStatMatchTeams = selectedPlayerStatMatch
@@ -839,6 +1027,16 @@ export function AdminScoreForm() {
       }
       return next;
     });
+  }
+
+  async function markNotificationRead(notification: AdminNotification) {
+    await markAdminNotificationRead(notification.key);
+    setMessage(`Marked notification as read: ${notification.title}.`);
+  }
+
+  async function markAllNotificationsRead() {
+    await Promise.all(unreadNotifications.map((notification) => markAdminNotificationRead(notification.key)));
+    setMessage(`Marked ${unreadNotifications.length} notification${unreadNotifications.length === 1 ? "" : "s"} as read.`);
   }
 
   useEffect(() => {
@@ -1059,6 +1257,97 @@ export function AdminScoreForm() {
       setMediaItemForm({ ...emptyMediaItem, publishedAt: new Date().toISOString().slice(0, 16) });
     }
     setMessage(`Deleted media item: ${item.title}`);
+  }
+
+  function submitSponsor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!sponsorForm.name.trim() || !sponsorForm.logoUrl.trim()) {
+      setMessage("Sponsor name and logo URL are required.");
+      return;
+    }
+
+    const sponsor: Sponsor = {
+      id: sponsorForm.id || createId("sponsor", sponsorForm.name),
+      name: sponsorForm.name.trim(),
+      logoUrl: sponsorForm.logoUrl.trim(),
+      websiteUrl: sponsorForm.websiteUrl?.trim() || undefined,
+      tier: sponsorForm.tier,
+      tournamentId: sponsorForm.tournamentId || undefined,
+      isActive: sponsorForm.isActive
+    };
+
+    saveSponsor(sponsor);
+    setSponsorForm(emptySponsor);
+    setMessage(`Saved sponsor: ${sponsor.name}`);
+  }
+
+  function editSponsor(sponsor: Sponsor) {
+    setSponsorForm({
+      id: sponsor.id,
+      name: sponsor.name,
+      logoUrl: sponsor.logoUrl,
+      websiteUrl: sponsor.websiteUrl ?? "",
+      tier: sponsor.tier,
+      tournamentId: sponsor.tournamentId ?? "",
+      isActive: sponsor.isActive
+    });
+    setActiveAdminSection("sponsors");
+  }
+
+  function deleteSponsorFromAdmin(sponsor: Sponsor) {
+    removeSponsor(sponsor.id);
+    if (sponsorForm.id === sponsor.id) {
+      setSponsorForm(emptySponsor);
+    }
+    setMessage(`Deleted sponsor: ${sponsor.name}`);
+  }
+
+  function submitTeamStaff(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const teamId = teamStaffForm.teamId || teamOptions[0]?.id;
+    const team = data.teams.find((item) => item.id === teamId);
+
+    if (!team || !teamStaffForm.name.trim()) {
+      setMessage("Choose a team and enter a staff name.");
+      return;
+    }
+
+    const staff: TeamStaff = {
+      id: teamStaffForm.id || createId("staff", teamStaffForm.name),
+      tournamentId: team.tournamentId ?? selectedTournamentId,
+      teamId: team.id,
+      name: teamStaffForm.name.trim(),
+      role: teamStaffForm.role,
+      phone: teamStaffForm.phone?.trim() || undefined,
+      email: teamStaffForm.email?.trim() || undefined,
+      photoUrl: teamStaffForm.photoUrl?.trim() || undefined
+    };
+
+    saveTeamStaff(staff);
+    setTeamStaffForm({ ...emptyTeamStaff, teamId: team.id });
+    setMessage(`Saved staff member: ${staff.name}`);
+  }
+
+  function editTeamStaff(staff: TeamStaff) {
+    setTeamStaffForm({
+      id: staff.id,
+      teamId: staff.teamId,
+      name: staff.name,
+      role: staff.role,
+      phone: staff.phone ?? "",
+      email: staff.email ?? "",
+      photoUrl: staff.photoUrl ?? ""
+    });
+    setActiveAdminSection("team_staff");
+  }
+
+  function deleteTeamStaffFromAdmin(staff: TeamStaff) {
+    removeTeamStaff(staff.id);
+    if (teamStaffForm.id === staff.id) {
+      setTeamStaffForm({ ...emptyTeamStaff, teamId: staff.teamId });
+    }
+    setMessage(`Deleted staff member: ${staff.name}`);
   }
 
   function submitTournament(event: React.FormEvent<HTMLFormElement>) {
@@ -1821,20 +2110,37 @@ export function AdminScoreForm() {
             <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Admin dashboard</p>
             <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Control center</h2>
           </div>
-          <button
-            type="button"
-            onClick={toggleAdminDarkMode}
-            aria-pressed={adminDarkMode}
-            className={clsx(
-              "inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black shadow-sm transition sm:w-auto",
-              adminDarkMode
-                ? "border-blue-400 bg-blue-600 text-white hover:bg-blue-500"
-                : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-            )}
-          >
-            {adminDarkMode ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-            {adminDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {canManageAll ? (
+              <button
+                type="button"
+                onClick={() => setActiveAdminSection("notifications")}
+                className="relative inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 sm:w-auto"
+              >
+                <Bell size={16} aria-hidden="true" />
+                Notifications
+                {unreadNotifications.length > 0 ? (
+                  <span className="absolute -right-2 -top-2 min-w-6 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-xs font-black text-white ring-2 ring-white">
+                    {unreadNotifications.length}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={toggleAdminDarkMode}
+              aria-pressed={adminDarkMode}
+              className={clsx(
+                "inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-black shadow-sm transition sm:w-auto",
+                adminDarkMode
+                  ? "border-blue-400 bg-blue-600 text-white hover:bg-blue-500"
+                  : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              )}
+            >
+              {adminDarkMode ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              {adminDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            </button>
+          </div>
         </div>
         <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
           Active workflow: <span className="text-blue-950">{activeAdminSectionLabel}</span>
@@ -1880,6 +2186,9 @@ export function AdminScoreForm() {
                       )}
                     >
                       {section.label}
+                      {section.id === "notifications" && unreadNotifications.length > 0 ? (
+                        <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-[0.65rem] text-white">{unreadNotifications.length}</span>
+                      ) : null}
                     </button>
                   ))}
                   {groupLinks.map((link) => (
@@ -1913,7 +2222,8 @@ export function AdminScoreForm() {
               ["Tournaments", data.tournaments.length],
               ["Teams", data.teams.length],
               ["Players", data.players.length],
-              ["Matches", data.matches.length]
+              ["Matches", data.matches.length],
+              ["Unread alerts", unreadNotifications.length]
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
                 <p className="text-xs font-black uppercase tracking-wide text-blue-600">{label}</p>
@@ -1921,6 +2231,94 @@ export function AdminScoreForm() {
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {canManageAll ? (
+        <section className={adminPanelClass("notifications")}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                <Bell size={20} aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-slate-950">Notification center</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {unreadNotifications.length} unread alert{unreadNotifications.length === 1 ? "" : "s"} from applications, rosters, discipline, fixtures, and completed matches.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void markAllNotificationsRead()}
+              disabled={unreadNotifications.length === 0}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CheckCircle2 size={16} aria-hidden="true" />
+              Mark all read
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-3">
+            {adminNotifications.map((notification) => {
+              const read = readNotificationKeys.has(notification.key);
+              const toneClass =
+                notification.tone === "red"
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : notification.tone === "amber"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : notification.tone === "emerald"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : notification.tone === "blue"
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                        : "border-slate-200 bg-slate-50 text-slate-700";
+
+              return (
+                <article key={notification.key} className={clsx("rounded-xl border p-4 transition", read ? "border-slate-200 bg-white opacity-70" : "border-blue-200 bg-white shadow-[0_16px_34px_rgba(37,99,235,0.10)]")}>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={clsx("rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide", toneClass)}>
+                          {notification.type.replace(/_/g, " ")}
+                        </span>
+                        {!read ? <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black uppercase text-white">Unread</span> : null}
+                        <span className="text-xs font-black uppercase tracking-wide text-slate-400">{formatAdminNotificationTime(notification.createdAt)}</span>
+                      </div>
+                      <h3 className="mt-3 text-base font-black text-slate-950">{notification.title}</h3>
+                      <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{notification.detail}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.location.hash = notification.href;
+                          setActiveAdminSection(notification.href.replace("#", "") as AdminSection);
+                        }}
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void markNotificationRead(notification)}
+                        disabled={read}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        <CheckCircle2 size={15} aria-hidden="true" />
+                        {read ? "Read" : "Mark read"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {adminNotifications.length === 0 ? (
+            <p className="mt-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-6 text-center text-sm font-bold text-blue-700">
+              No operation alerts right now.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -2275,6 +2673,101 @@ export function AdminScoreForm() {
         </div>
       </section>
 
+      <section className={adminPanelClass("sponsors")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Sponsors", "Manage active sponsor strips and cards across tournament pages, match centers, scoreboards, and reports.")}
+          {sponsorForm.id ? (
+            <button onClick={() => setSponsorForm(emptySponsor)} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <X size={16} aria-hidden="true" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+        <form onSubmit={submitSponsor} className="grid gap-4 md:grid-cols-4">
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Sponsor name</span>
+            <input value={sponsorForm.name} onChange={(event) => setSponsorForm({ ...sponsorForm, name: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Tier</span>
+            <select value={sponsorForm.tier} onChange={(event) => setSponsorForm({ ...sponsorForm, tier: event.target.value as SponsorTier })} className={inputClass()}>
+              {sponsorTierOptions.map((tier) => (
+                <option key={tier} value={tier}>
+                  {tier}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Tournament</span>
+            <select value={sponsorForm.tournamentId} onChange={(event) => setSponsorForm({ ...sponsorForm, tournamentId: event.target.value })} className={inputClass()}>
+              <option value="">Global sponsor</option>
+              {data.tournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Logo URL</span>
+            <input value={sponsorForm.logoUrl} onChange={(event) => setSponsorForm({ ...sponsorForm, logoUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Website URL</span>
+            <input value={sponsorForm.websiteUrl ?? ""} onChange={(event) => setSponsorForm({ ...sponsorForm, websiteUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <label className="flex items-end gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+            <input type="checkbox" checked={sponsorForm.isActive} onChange={(event) => setSponsorForm({ ...sponsorForm, isActive: event.target.checked })} className="h-5 w-5 rounded border-blue-300 text-blue-600" />
+            <span className="text-sm font-black text-blue-800">Active</span>
+          </label>
+          <div className="flex items-end md:col-span-3">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              {sponsorForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+              {sponsorForm.id ? "Save sponsor" : "Create sponsor"}
+            </button>
+          </div>
+        </form>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.sponsors.map((sponsor) => {
+            const sponsorTournament = sponsor.tournamentId ? data.tournaments.find((tournament) => tournament.id === sponsor.tournamentId) : undefined;
+            return (
+              <div key={sponsor.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="h-14 w-24 shrink-0 rounded-lg border border-blue-100 bg-white bg-contain bg-center bg-no-repeat shadow-sm" style={{ backgroundImage: `url(${sponsor.logoUrl})` }} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">{sponsor.tier}</span>
+                      <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide", sponsor.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                        {sponsor.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <p className="mt-2 break-words text-base font-black text-slate-950">{sponsor.name}</p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-wide text-slate-400">{sponsorTournament?.name ?? "Global sponsor"}</p>
+                  </div>
+                </div>
+                {sponsor.websiteUrl ? <p className="mt-3 truncate text-sm font-semibold text-blue-700">{sponsor.websiteUrl}</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => editSponsor(sponsor)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                    <Pencil size={14} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => deleteSponsorFromAdmin(sponsor)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {data.sponsors.length === 0 ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-2 xl:col-span-3">
+              No sponsors yet.
+            </p>
+          ) : null}
+        </div>
+      </section>
+
       <section className={adminPanelClass("teams")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Teams", "Create, edit, and delete teams. Deleting a team also removes its players and matches.")}
@@ -2367,6 +2860,99 @@ export function AdminScoreForm() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("team_staff")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Team staff", "Manage team officials and support staff for roster sheets and match reports.")}
+          {teamStaffForm.id ? (
+            <button onClick={() => setTeamStaffForm({ ...emptyTeamStaff, teamId: teamStaffForm.teamId })} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <X size={16} aria-hidden="true" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+        <form onSubmit={submitTeamStaff} className="grid gap-4 md:grid-cols-4">
+          <label>
+            <span className={labelClass()}>Team</span>
+            <select value={teamStaffForm.teamId || teamOptions[0]?.id || ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, teamId: event.target.value })} className={inputClass()}>
+              {teamOptions.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Role</span>
+            <select value={teamStaffForm.role} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, role: event.target.value as TeamStaffRole })} className={inputClass()}>
+              {teamStaffRoleOptions.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Name</span>
+            <input value={teamStaffForm.name} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, name: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Phone optional</span>
+            <input value={teamStaffForm.phone ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, phone: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Email optional</span>
+            <input type="email" value={teamStaffForm.email ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, email: event.target.value })} className={inputClass()} />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Photo URL optional</span>
+            <input value={teamStaffForm.photoUrl ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, photoUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <div className="flex items-end md:col-span-4">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              {teamStaffForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+              {teamStaffForm.id ? "Save staff" : "Add staff"}
+            </button>
+          </div>
+        </form>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.teamStaff.map((staff) => {
+            const team = data.teams.find((item) => item.id === staff.teamId);
+            return (
+              <div key={staff.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  {staff.photoUrl ? (
+                    <span className="h-12 w-12 shrink-0 rounded-lg bg-cover bg-center ring-1 ring-blue-100" style={{ backgroundImage: `url(${staff.photoUrl})` }} />
+                  ) : (
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">{staff.name.slice(0, 2).toUpperCase()}</span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black text-slate-950">{staff.name}</p>
+                    <p className="text-xs font-black uppercase tracking-wide text-blue-700">{staff.role}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-slate-500">{team?.name ?? staff.teamId}</p>
+                  </div>
+                </div>
+                {staff.phone || staff.email ? <p className="mt-3 truncate text-sm font-semibold text-slate-500">{[staff.phone, staff.email].filter(Boolean).join(" / ")}</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => editTeamStaff(staff)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                    <Pencil size={14} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => deleteTeamStaffFromAdmin(staff)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {data.teamStaff.length === 0 ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-2 xl:col-span-3">
+              No team staff yet.
+            </p>
+          ) : null}
         </div>
       </section>
 

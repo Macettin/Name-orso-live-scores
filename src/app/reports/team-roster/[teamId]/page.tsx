@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { activeSponsorsForTournament, SponsorStrip } from "@/components/sponsor-strip";
+import { TeamStaffList } from "@/components/team-staff-list";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import type { Player, Team, Tournament } from "@/lib/types";
 
@@ -76,7 +78,9 @@ export default function TeamRosterReportPage() {
   }
 
   const tournament = data.tournaments.find((item) => item.id === team.tournamentId);
+  const activeSponsors = activeSponsorsForTournament(data.sponsors, team.tournamentId);
   const players = data.players.filter((player) => player.teamId === team.id).sort((first, second) => first.number - second.number || first.name.localeCompare(second.name));
+  const staff = data.teamStaff.filter((member) => member.teamId === team.id);
   const clubAdminEmails = clubAdminAssignments.filter((assignment) => assignment.teamId === team.id).map((assignment) => assignment.email).filter(Boolean);
   const contact = clubAdminEmails.join(", ") || team.coach || undefined;
   const approved = team.rosterStatus === "Approved";
@@ -112,6 +116,10 @@ export default function TeamRosterReportPage() {
             </span>
           </div>
         </header>
+
+        <SponsorStrip sponsors={activeSponsors} title="Tournament sponsors" compact printable />
+
+        <TeamStaffList staff={staff} title="Team staff" compact />
 
         <section className="relative grid gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
           <TeamReportLogo team={team} />

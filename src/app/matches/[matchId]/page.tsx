@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
 import { CalendarDays, CircleDot, FileText, MapPin, Radio, RotateCcw, Square, Target, Trophy } from "lucide-react";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
+import { activeSponsorsForTournament, SponsorStrip } from "@/components/sponsor-strip";
 import { PageHeader, TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { buildStandings, getMatchTeamStats, getTeam, type TournamentData } from "@/lib/data-store";
@@ -1389,6 +1390,7 @@ export default function MatchPage() {
   const home = getTeam(data, match.homeTeamId);
   const away = getTeam(data, match.awayTeamId);
   const tournament = data.tournaments.find((item) => item.id === match.tournamentId);
+  const activeSponsors = activeSponsorsForTournament(data.sponsors, match.tournamentId);
   const events = data.events.filter((event) => event.matchId === match.id).sort((first, second) => minuteSortValue(first) - minuteSortValue(second));
   const goalEvents = events.filter((event) => event.type === "goal" || event.type === "penalty_goal");
   const homeGoalEvents = goalEvents.filter((event) => event.teamId === match.homeTeamId);
@@ -1492,6 +1494,7 @@ export default function MatchPage() {
       </section>
 
       <MatchSponsorStrip tournament={tournament} accent={accent} />
+      <SponsorStrip sponsors={activeSponsors} title="Match sponsors" compact />
 
       <OfficialsCard officials={assignedOfficials} />
 

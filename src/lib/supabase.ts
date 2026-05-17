@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type MediaItem, type MediaType, type NewsCategory, type NewsPost, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type AdminNotificationRead, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type MediaItem, type MediaType, type NewsCategory, type NewsPost, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Sponsor, type SponsorTier, type Team, type TeamAdmin, type TeamAdminAssignment, type TeamStaff, type TeamStaffRole, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -257,6 +257,37 @@ type MediaItemRow = {
   updated_at: string | null;
 };
 
+type SponsorRow = {
+  id: string;
+  name: string;
+  logo_url: string;
+  website_url: string | null;
+  tier: SponsorTier;
+  tournament_id: string | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type TeamStaffRow = {
+  id: string;
+  tournament_id: string;
+  team_id: string;
+  name: string;
+  role: TeamStaffRole;
+  phone: string | null;
+  email: string | null;
+  photo_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type AdminNotificationReadRow = {
+  user_id: string;
+  notification_key: string;
+  read_at: string;
+};
+
 type TeamAdminRow = {
   user_id: string;
   team_id: string;
@@ -477,6 +508,43 @@ function mapMediaItem(row: MediaItemRow): MediaItem {
   };
 }
 
+function mapSponsor(row: SponsorRow): Sponsor {
+  return {
+    id: row.id,
+    name: row.name,
+    logoUrl: row.logo_url,
+    websiteUrl: row.website_url ?? undefined,
+    tier: row.tier,
+    tournamentId: row.tournament_id ?? undefined,
+    isActive: row.is_active ?? true,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  };
+}
+
+function mapTeamStaff(row: TeamStaffRow): TeamStaff {
+  return {
+    id: row.id,
+    tournamentId: row.tournament_id,
+    teamId: row.team_id,
+    name: row.name,
+    role: row.role,
+    phone: row.phone ?? undefined,
+    email: row.email ?? undefined,
+    photoUrl: row.photo_url ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  };
+}
+
+function mapAdminNotificationRead(row: AdminNotificationReadRow): AdminNotificationRead {
+  return {
+    userId: row.user_id,
+    notificationKey: row.notification_key,
+    readAt: row.read_at
+  };
+}
+
 function mapPlayerMatchStat(row: MatchStatRow): PlayerMatchStat | null {
   if (!row.player_id || !playerStatKeys.includes(row.stat_key as PlayerStatKey)) {
     return null;
@@ -528,7 +596,10 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     { data: officialRows, error: officialError },
     applicationResult,
     newsPostResult,
-    mediaItemResult
+    mediaItemResult,
+    sponsorResult,
+    teamStaffResult,
+    adminNotificationReadResult
   ] = await Promise.all([
     supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
     supabase
@@ -558,7 +629,22 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase
       .from("media_items")
       .select("id,tournament_id,title,media_type,image_url,video_url,caption,published_at,is_published,created_at,updated_at")
-      .order("published_at", { ascending: false })
+      .order("published_at", { ascending: false }),
+    supabase
+      .from("sponsors")
+      .select("id,name,logo_url,website_url,tier,tournament_id,is_active,created_at,updated_at")
+      .order("tier")
+      .order("name"),
+    supabase
+      .from("team_staff")
+      .select("id,tournament_id,team_id,name,role,phone,email,photo_url,created_at,updated_at")
+      .eq("tournament_id", tournamentId)
+      .order("team_id")
+      .order("role")
+      .order("name"),
+    supabase
+      .from("admin_notification_reads")
+      .select("user_id,notification_key,read_at")
   ]);
 
   if (tournamentError) throw tournamentError;
@@ -568,6 +654,9 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   if (applicationResult.error && !isMissingRelationError(applicationResult.error) && !(applicationResult.error.code === "PGRST204" || applicationResult.error.code === "42703")) throw applicationResult.error;
   if (newsPostResult.error && !isMissingRelationError(newsPostResult.error) && !(newsPostResult.error.code === "PGRST204" || newsPostResult.error.code === "42703")) throw newsPostResult.error;
   if (mediaItemResult.error && !isMissingRelationError(mediaItemResult.error) && !(mediaItemResult.error.code === "PGRST204" || mediaItemResult.error.code === "42703")) throw mediaItemResult.error;
+  if (sponsorResult.error && !isMissingRelationError(sponsorResult.error) && !(sponsorResult.error.code === "PGRST204" || sponsorResult.error.code === "42703")) throw sponsorResult.error;
+  if (teamStaffResult.error && !isMissingRelationError(teamStaffResult.error) && !(teamStaffResult.error.code === "PGRST204" || teamStaffResult.error.code === "42703")) throw teamStaffResult.error;
+  if (adminNotificationReadResult.error && !isMissingRelationError(adminNotificationReadResult.error) && !(adminNotificationReadResult.error.code === "PGRST204" || adminNotificationReadResult.error.code === "42703")) throw adminNotificationReadResult.error;
 
   let teamRows = teamResult.data as TeamRow[] | null;
   if (teamResult.error && (teamResult.error.code === "PGRST204" || teamResult.error.code === "42703")) {
@@ -700,7 +789,10 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     matchOfficials: matchOfficialError ? [] : ((matchOfficialRows ?? []) as MatchOfficialRow[]).map(mapMatchOfficial),
     tournamentApplications: applicationLoadError ? [] : ((applicationRows ?? []) as TournamentApplicationRow[]).map(mapTournamentApplication),
     newsPosts: newsPostResult.error ? [] : ((newsPostResult.data ?? []) as NewsPostRow[]).map(mapNewsPost),
-    mediaItems: mediaItemResult.error ? [] : ((mediaItemResult.data ?? []) as MediaItemRow[]).map(mapMediaItem)
+    mediaItems: mediaItemResult.error ? [] : ((mediaItemResult.data ?? []) as MediaItemRow[]).map(mapMediaItem),
+    sponsors: sponsorResult.error ? [] : ((sponsorResult.data ?? []) as SponsorRow[]).map(mapSponsor),
+    teamStaff: teamStaffResult.error ? [] : ((teamStaffResult.data ?? []) as TeamStaffRow[]).map(mapTeamStaff),
+    adminNotificationReads: adminNotificationReadResult.error ? [] : ((adminNotificationReadResult.data ?? []) as AdminNotificationReadRow[]).map(mapAdminNotificationRead)
   };
 }
 
@@ -1330,5 +1422,71 @@ export async function deleteSupabaseMediaItem(itemId: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
 
   const { error } = await supabase.from("media_items").delete().eq("id", itemId);
+  if (error) throw error;
+}
+
+export async function saveSupabaseSponsor(sponsor: Sponsor) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("sponsors").upsert({
+    id: sponsor.id,
+    name: sponsor.name,
+    logo_url: sponsor.logoUrl,
+    website_url: sponsor.websiteUrl || null,
+    tier: sponsor.tier,
+    tournament_id: sponsor.tournamentId || null,
+    is_active: sponsor.isActive
+  });
+  if (error) throw error;
+}
+
+export async function deleteSupabaseSponsor(sponsorId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("sponsors").delete().eq("id", sponsorId);
+  if (error) throw error;
+}
+
+export async function saveSupabaseTeamStaff(staff: TeamStaff, tournamentId = "main-tournament") {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("team_staff").upsert({
+    id: staff.id,
+    tournament_id: staff.tournamentId ?? tournamentId,
+    team_id: staff.teamId,
+    name: staff.name,
+    role: staff.role,
+    phone: staff.phone || null,
+    email: staff.email || null,
+    photo_url: staff.photoUrl || null
+  });
+  if (error) throw error;
+}
+
+export async function deleteSupabaseTeamStaff(staffId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("team_staff").delete().eq("id", staffId);
+  if (error) throw error;
+}
+
+export async function markSupabaseAdminNotificationRead(notificationKey: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  const userId = userData.user?.id;
+  if (!userId) throw new Error("Admin session is required.");
+
+  const { error } = await supabase.from("admin_notification_reads").upsert({
+    user_id: userId,
+    notification_key: notificationKey,
+    read_at: new Date().toISOString()
+  });
   if (error) throw error;
 }

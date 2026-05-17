@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Activity, CalendarDays, FileText, ShieldAlert, Trophy } from "lucide-react";
 import { MatchCard } from "@/components/match-card";
+import { TeamStaffList } from "@/components/team-staff-list";
 import { Card, PageHeader, TeamLogo } from "@/components/ui";
 import { teamMatches, teamPlayers } from "@/lib/data-store";
 import { disciplinaryRows } from "@/lib/disciplinary";
@@ -80,6 +81,7 @@ export default function TeamPage() {
     .sort((first, second) => second.total - first.total || first.player.name.localeCompare(second.player.name))
     .slice(0, 5);
   const disciplinary = disciplinaryRows({ players: visibleRoster, teams: data.teams, matches: data.matches, events: data.events });
+  const staff = data.teamStaff.filter((member) => member.teamId === team.id);
 
   return (
     <div className="grid gap-8">
@@ -121,6 +123,8 @@ export default function TeamPage() {
           ))}
         </div>
       </section>
+
+      <TeamStaffList staff={staff} title="Team staff" />
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <Card>

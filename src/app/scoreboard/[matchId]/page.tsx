@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
+import { activeSponsorsForTournament } from "@/components/sponsor-strip";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -173,6 +174,7 @@ export default function ScoreboardPage() {
   const home = getTeam(data, match.homeTeamId);
   const away = getTeam(data, match.awayTeamId);
   const tournament = data.tournaments.find((item) => item.id === match.tournamentId);
+  const activeSponsors = activeSponsorsForTournament(data.sponsors, match.tournamentId).slice(0, 4);
   const goalEvents = data.events.filter((event) => event.matchId === match.id && event.type === "goal");
   const homePlayers = data.players.filter((player) => player.teamId === match.homeTeamId);
   const awayPlayers = data.players.filter((player) => player.teamId === match.awayTeamId);
@@ -250,7 +252,19 @@ export default function ScoreboardPage() {
           {officials.length > 0 ? <p className="mt-2 truncate text-sm font-bold text-white/55">Referee: {officials[0]?.name}</p> : null}
         </div>
         <div className="flex justify-start md:justify-end">
-          {tournament?.sponsorName || tournament?.sponsorLogoUrl ? (
+          {activeSponsors.length > 0 ? (
+            <div className="grid w-full gap-2 sm:grid-cols-2">
+              {activeSponsors.map((sponsor) => (
+                <div key={sponsor.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-4 py-3 shadow-[0_18px_42px_rgba(0,0,0,0.18)] backdrop-blur">
+                  <span className="h-10 w-20 shrink-0 rounded-lg bg-white bg-contain bg-center bg-no-repeat p-2" style={{ backgroundImage: `url(${sponsor.logoUrl})` }} />
+                  <div className="min-w-0">
+                    <p className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-white/45">{sponsor.tier}</p>
+                    <p className="mt-1 truncate text-sm font-black">{sponsor.name}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : tournament?.sponsorName || tournament?.sponsorLogoUrl ? (
             <div className="flex min-w-0 items-center gap-4 rounded-xl border border-white/15 bg-white/10 px-5 py-3 shadow-[0_18px_42px_rgba(0,0,0,0.18)] backdrop-blur">
               {tournament.sponsorLogoUrl ? (
                 <span className="h-12 w-28 shrink-0 rounded-lg bg-white bg-contain bg-center bg-no-repeat p-2" style={{ backgroundImage: `url(${tournament.sponsorLogoUrl})` }} />

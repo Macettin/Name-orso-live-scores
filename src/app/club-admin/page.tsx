@@ -7,11 +7,12 @@ import { AlertCircle, CheckCircle2, Lock, LogOut, Pencil, Plus, Printer, Save, S
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold } from "@/lib/disciplinary";
-import { playerStatKeys, type Player, type Team } from "@/lib/types";
+import { playerStatKeys, teamStaffRoleOptions, type Player, type Team, type TeamStaff, type TeamStaffRole } from "@/lib/types";
 import { PageHeader, TeamLogo } from "@/components/ui";
 
 type TeamForm = Pick<Team, "name" | "logoUrl" | "city" | "coach" | "colors">;
 type PlayerForm = Pick<Player, "id" | "name" | "number" | "position" | "photoUrl">;
+type TeamStaffForm = Pick<TeamStaff, "id" | "name" | "role" | "phone" | "email" | "photoUrl">;
 type RosterImportRow = {
   name: string;
   numberText: string;
@@ -39,6 +40,15 @@ const emptyPlayerForm: PlayerForm = {
   name: "",
   number: 0,
   position: "",
+  photoUrl: ""
+};
+
+const emptyTeamStaffForm: TeamStaffForm = {
+  id: "",
+  name: "",
+  role: "Head Coach",
+  phone: "",
+  email: "",
   photoUrl: ""
 };
 
@@ -345,7 +355,9 @@ export default function ClubAdminPage() {
     uploadTeamLogo,
     savePlayer,
     uploadPlayerPhoto,
-    removePlayer
+    removePlayer,
+    saveTeamStaff,
+    removeTeamStaff
   } = useTournamentData();
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [teamFormTeamId, setTeamFormTeamId] = useState("");
@@ -353,6 +365,7 @@ export default function ClubAdminPage() {
   const [teamLogoFile, setTeamLogoFile] = useState<File | null>(null);
   const [playerForm, setPlayerForm] = useState<PlayerForm>(emptyPlayerForm);
   const [playerPhotoFile, setPlayerPhotoFile] = useState<File | null>(null);
+  const [teamStaffForm, setTeamStaffForm] = useState<TeamStaffForm>(emptyTeamStaffForm);
   const [rosterPreviewRows, setRosterPreviewRows] = useState<RosterPreviewRow[]>([]);
   const [rosterImportSaving, setRosterImportSaving] = useState(false);
   const [message, setMessage] = useState("Manage your assigned team details and roster.");
@@ -374,6 +387,7 @@ export default function ClubAdminPage() {
           colors: selectedTeam?.colors ?? ""
         };
   const roster = selectedTeam ? data.players.filter((player) => player.teamId === selectedTeam.id) : [];
+  const teamStaff = selectedTeam ? data.teamStaff.filter((staff) => staff.teamId === selectedTeam.id) : [];
   const disciplinaryTableRows = disciplinaryRows({ players: roster, teams: data.teams, matches: data.matches, events: data.events, yellowThreshold: yellowSuspensionThreshold });
   const rosterImportReadyRows = rosterPreviewRows.filter((row) => row.status === "ready");
   const rosterStatus = selectedTeam?.rosterStatus ?? "Draft";
@@ -481,6 +495,58 @@ export default function ClubAdminPage() {
     setPlayerForm(emptyPlayerForm);
     setPlayerPhotoFile(null);
     setMessage(`Saved player: ${playerForm.name.trim()}.`);
+  }
+
+  async function submitTeamStaff(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTeam || !teamStaffForm.name.trim()) {
+      return;
+    }
+
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before editing staff.");
+      return;
+    }
+
+    const staff: TeamStaff = {
+      id: teamStaffForm.id || createId("staff", teamStaffForm.name),
+      tournamentId: selectedTeam.tournamentId ?? selectedTournamentId,
+      teamId: selectedTeam.id,
+      name: teamStaffForm.name.trim(),
+      role: teamStaffForm.role,
+      phone: teamStaffForm.phone?.trim() || undefined,
+      email: teamStaffForm.email?.trim() || undefined,
+      photoUrl: teamStaffForm.photoUrl?.trim() || undefined
+    };
+
+    await saveTeamStaff(staff);
+    setTeamStaffForm(emptyTeamStaffForm);
+    setMessage(`Saved staff member: ${staff.name}.`);
+  }
+
+  function editTeamStaff(staff: TeamStaff) {
+    setTeamStaffForm({
+      id: staff.id,
+      name: staff.name,
+      role: staff.role,
+      phone: staff.phone ?? "",
+      email: staff.email ?? "",
+      photoUrl: staff.photoUrl ?? ""
+    });
+  }
+
+  async function deleteTeamStaff(staffId: string) {
+    if (rosterLocked) {
+      setMessage("This approved roster is locked. Ask the main admin to unlock it before deleting staff.");
+      return;
+    }
+
+    await removeTeamStaff(staffId);
+    if (teamStaffForm.id === staffId) {
+      setTeamStaffForm(emptyTeamStaffForm);
+    }
+    setMessage("Deleted staff member.");
   }
 
   function editPlayer(player: Player) {
@@ -774,6 +840,77 @@ export default function ClubAdminPage() {
                   </button>
                 </div>
               </form>
+            </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Team staff</h2>
+                  <p className="mt-1 text-sm text-slate-400">Add coaches, medical staff, managers, and media contacts for official reports.</p>
+                </div>
+                {teamStaffForm.id ? (
+                  <button onClick={() => setTeamStaffForm(emptyTeamStaffForm)} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+                    <X size={16} aria-hidden="true" />
+                    Cancel edit
+                  </button>
+                ) : null}
+              </div>
+              <form onSubmit={submitTeamStaff} className="grid gap-4 md:grid-cols-4">
+                <label>
+                  <span className={labelClass()}>Role</span>
+                  <select disabled={rosterLocked} value={teamStaffForm.role} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, role: event.target.value as TeamStaffRole })} className={disabledInputClass(rosterLocked)}>
+                    {teamStaffRoleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="md:col-span-3">
+                  <span className={labelClass()}>Name</span>
+                  <input disabled={rosterLocked} value={teamStaffForm.name} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, name: event.target.value })} className={disabledInputClass(rosterLocked)} />
+                </label>
+                <label>
+                  <span className={labelClass()}>Phone</span>
+                  <input disabled={rosterLocked} value={teamStaffForm.phone ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, phone: event.target.value })} className={disabledInputClass(rosterLocked)} />
+                </label>
+                <label>
+                  <span className={labelClass()}>Email</span>
+                  <input disabled={rosterLocked} type="email" value={teamStaffForm.email ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, email: event.target.value })} className={disabledInputClass(rosterLocked)} />
+                </label>
+                <label className="md:col-span-2">
+                  <span className={labelClass()}>Photo URL</span>
+                  <input disabled={rosterLocked} value={teamStaffForm.photoUrl ?? ""} onChange={(event) => setTeamStaffForm({ ...teamStaffForm, photoUrl: event.target.value })} className={disabledInputClass(rosterLocked)} />
+                </label>
+                <div className="flex items-end md:col-span-4">
+                  <button disabled={rosterLocked} className="flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                    {teamStaffForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+                    {teamStaffForm.id ? "Save staff" : "Add staff"}
+                  </button>
+                </div>
+              </form>
+              <div className="mt-5 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {teamStaff.map((staff) => (
+                  <div key={staff.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900">{staff.name}</p>
+                      <p className="text-sm font-semibold text-blue-700">{staff.role}</p>
+                      {staff.phone || staff.email ? <p className="mt-1 text-xs font-semibold text-slate-400">{[staff.phone, staff.email].filter(Boolean).join(" / ")}</p> : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <button disabled={rosterLocked} onClick={() => editTeamStaff(staff)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                        <Pencil size={14} aria-hidden="true" />
+                        Edit
+                      </button>
+                      <button disabled={rosterLocked} onClick={() => void deleteTeamStaff(staff.id)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                        <Trash2 size={14} aria-hidden="true" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {teamStaff.length === 0 ? <p className="p-4 text-sm text-slate-400">No staff are listed for this team yet.</p> : null}
+              </div>
             </section>
 
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">

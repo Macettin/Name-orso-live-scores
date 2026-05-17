@@ -5,6 +5,7 @@ import { Activity, CalendarDays, FileText, ShieldCheck } from "lucide-react";
 import { MediaGrid } from "@/components/media-gallery";
 import { MatchCard } from "@/components/match-card";
 import { NewsCard } from "@/components/news-card";
+import { activeSponsorsForTournament, SponsorStrip } from "@/components/sponsor-strip";
 import { Card, TournamentCoverBanner } from "@/components/ui";
 import { buildStandings } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -23,6 +24,7 @@ export default function Home() {
     .filter((item) => item.isPublished)
     .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
     .slice(0, 6);
+  const activeSponsors = activeSponsorsForTournament(data.sponsors, selectedTournamentId);
   const scoreboardMatch = liveMatches[0] ?? nextFixtures[0] ?? data.matches[0];
   const heroChips = [
     { label: "Live scores", href: "/live" },
@@ -163,6 +165,9 @@ export default function Home() {
             <p className="text-sm font-medium text-slate-400">Table entries</p>
           </div>
         </Card>
+      </div>
+      <div className="mt-8">
+        <SponsorStrip sponsors={activeSponsors} title="Featured sponsors" />
       </div>
       <TournamentCoverBanner tournament={tournament} />
       <section className="mt-8 rounded-lg border border-blue-100 bg-white p-4 shadow-[0_16px_42px_rgba(37,99,235,0.08)] sm:p-5">

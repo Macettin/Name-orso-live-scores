@@ -6,11 +6,13 @@ import {
   deleteMatchEvent,
   deleteMediaItem,
   deletePlayer,
+  deleteTeamStaff,
   deleteTeam,
   deleteTournamentApplication,
   deleteTournament,
   deleteOfficial,
   deleteNewsPost,
+  deleteSponsor,
   addPlayerMatchStat,
   upsertMatchTeamStats,
   upsertMatchLineups,
@@ -22,10 +24,13 @@ import {
   upsertOfficial,
   upsertMediaItem,
   upsertPlayer,
+  upsertTeamStaff,
   upsertTeam,
   upsertTournamentApplication,
   upsertTournament,
-  upsertNewsPost
+  upsertNewsPost,
+  upsertSponsor,
+  upsertAdminNotificationRead
 } from "@/lib/data-store";
 import {
   assignSupabaseClubAdmin,
@@ -33,18 +38,21 @@ import {
   deleteSupabaseMatchEvent,
   deleteSupabaseMediaItem,
   deleteSupabasePlayer,
+  deleteSupabaseTeamStaff,
   deleteSupabaseOfficial,
   deleteSupabaseTeam,
   deleteSupabaseTeamAdminAssignment,
   deleteSupabaseTournamentApplication,
   deleteSupabaseTournament,
   deleteSupabaseNewsPost,
+  deleteSupabaseSponsor,
   fetchSupabaseMyTeamAdmins,
   fetchSupabaseTeamAdminAssignments,
   fetchSupabaseTournamentData,
   getCurrentProfile,
   getSupabaseClient,
   isSupabaseConfigured,
+  markSupabaseAdminNotificationRead,
   saveSupabaseMatch,
   saveSupabaseMatchEvent,
   saveSupabaseMatchLineups,
@@ -53,11 +61,13 @@ import {
   saveSupabaseMediaItem,
   saveSupabaseOfficial,
   saveSupabasePlayer,
+  saveSupabaseTeamStaff,
   saveSupabasePlayerMatchStat,
   saveSupabaseScore,
   saveSupabaseTeam,
   saveSupabaseTournament,
   saveSupabaseNewsPost,
+  saveSupabaseSponsor,
   signInWithEmail,
   signOut,
   submitSupabaseTournamentApplication,
@@ -66,7 +76,7 @@ import {
   uploadSupabasePlayerPhoto,
   uploadSupabaseTeamLogo
 } from "@/lib/supabase";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, TournamentApplication, TournamentApplicationStatus, UserProfile } from "@/lib/types";
+import type { AdminNotificationRead, Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerStatKey, Sponsor, Team, TeamAdminAssignment, TeamStaff, Tournament, TournamentApplication, TournamentApplicationStatus, UserProfile } from "@/lib/types";
 
 const emptyTournamentData: TournamentData = {
   tournaments: [],
@@ -81,7 +91,10 @@ const emptyTournamentData: TournamentData = {
   matchOfficials: [],
   tournamentApplications: [],
   newsPosts: [],
-  mediaItems: []
+  mediaItems: [],
+  sponsors: [],
+  teamStaff: [],
+  adminNotificationReads: []
 };
 const defaultTournamentId = "main-tournament";
 const selectedTournamentStorageKey = "orso-selected-tournament";
@@ -219,6 +232,9 @@ function useTournamentDataState() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tournament_applications" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "news_posts" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "sponsors" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_staff" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "admin_notification_reads" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "team_admins" }, () => void syncProfile())
@@ -414,7 +430,24 @@ function useTournamentDataState() {
     saveMediaItem: (item: MediaItem) =>
       persist(() => saveSupabaseMediaItem(item), upsertMediaItem(data, item)),
     removeMediaItem: (itemId: string) =>
-      persist(() => deleteSupabaseMediaItem(itemId), deleteMediaItem(data, itemId))
+      persist(() => deleteSupabaseMediaItem(itemId), deleteMediaItem(data, itemId)),
+    saveSponsor: (sponsor: Sponsor) =>
+      persist(() => saveSupabaseSponsor(sponsor), upsertSponsor(data, sponsor)),
+    removeSponsor: (sponsorId: string) =>
+      persist(() => deleteSupabaseSponsor(sponsorId), deleteSponsor(data, sponsorId)),
+    saveTeamStaff: (staff: TeamStaff) =>
+      persist(() => saveSupabaseTeamStaff(staff, selectedTournamentId), upsertTeamStaff(data, staff)),
+    removeTeamStaff: (staffId: string) =>
+      persist(() => deleteSupabaseTeamStaff(staffId), deleteTeamStaff(data, staffId)),
+    markAdminNotificationRead: (notificationKey: string) => {
+      if (!profile) return Promise.resolve();
+      const read: AdminNotificationRead = {
+        userId: profile.id,
+        notificationKey,
+        readAt: new Date().toISOString()
+      };
+      return persist(() => markSupabaseAdminNotificationRead(notificationKey), upsertAdminNotificationRead(data, read));
+    }
   };
 }
 

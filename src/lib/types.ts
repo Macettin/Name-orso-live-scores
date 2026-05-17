@@ -17,6 +17,10 @@ export const newsCategoryOptions = ["News", "Announcement", "Result", "Media"] a
 export type NewsCategory = (typeof newsCategoryOptions)[number];
 export const mediaTypeOptions = ["photo", "video", "youtube"] as const;
 export type MediaType = (typeof mediaTypeOptions)[number];
+export const sponsorTierOptions = ["Main Sponsor", "Gold", "Silver", "Partner"] as const;
+export type SponsorTier = (typeof sponsorTierOptions)[number];
+export const teamStaffRoleOptions = ["Head Coach", "Assistant Coach", "Doctor", "Physio", "Team Manager", "Media Officer"] as const;
+export type TeamStaffRole = (typeof teamStaffRoleOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
@@ -126,6 +130,37 @@ export type MediaItem = {
   isPublished: boolean;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type Sponsor = {
+  id: string;
+  name: string;
+  logoUrl: string;
+  websiteUrl?: string;
+  tier: SponsorTier;
+  tournamentId?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type TeamStaff = {
+  id: string;
+  tournamentId?: string;
+  teamId: string;
+  name: string;
+  role: TeamStaffRole;
+  phone?: string;
+  email?: string;
+  photoUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AdminNotificationRead = {
+  userId: string;
+  notificationKey: string;
+  readAt: string;
 };
 
 export type Player = {

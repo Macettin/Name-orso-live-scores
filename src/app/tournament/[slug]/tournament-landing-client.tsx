@@ -7,6 +7,7 @@ import { CalendarDays, ExternalLink, GitBranch, MapPin, PlayCircle, Radio, Shiel
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { MediaGrid } from "@/components/media-gallery";
 import { NewsCard } from "@/components/news-card";
+import { activeSponsorsForTournament, SponsorStrip as ManagedSponsorStrip } from "@/components/sponsor-strip";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -237,6 +238,7 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
     .filter((item) => item.isPublished && item.tournamentId === tournament.id)
     .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
     .slice(0, 6);
+  const managedSponsors = activeSponsorsForTournament(data.sponsors, tournament.id);
   const streamMatch = matches.find((match) => match.youtubeUrl);
   const standings = buildStandings({ ...data, teams, matches }).filter((standing) => teamIds.has(standing.teamId)).sort((first, second) => second.tournamentPoints - first.tournamentPoints).slice(0, 5);
   const scorers = topScorers(players);
@@ -310,6 +312,8 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
       </section>
 
       <SponsorStrip tournament={tournament} accent={accent} />
+
+      <ManagedSponsorStrip sponsors={managedSponsors} title={`${tournament.name} sponsors`} />
 
       {tournamentNews.length > 0 ? (
         <SectionShell eyebrow="Newsroom" title="Tournament updates">

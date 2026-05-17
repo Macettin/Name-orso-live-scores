@@ -1,5 +1,5 @@
 import { matchTeamStatKeys } from "./types";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
+import type { AdminNotificationRead, Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerMatchStat, PlayerStatKey, Sponsor, Standing, Team, TeamStaff, Tournament, TournamentApplication } from "./types";
 
 export type TournamentData = {
   tournaments: Tournament[];
@@ -15,6 +15,9 @@ export type TournamentData = {
   tournamentApplications: TournamentApplication[];
   newsPosts: NewsPost[];
   mediaItems: MediaItem[];
+  sponsors: Sponsor[];
+  teamStaff: TeamStaff[];
+  adminNotificationReads: AdminNotificationRead[];
 };
 
 export function slugify(value: string) {
@@ -83,7 +86,10 @@ export function deleteTeam(data: TournamentData, teamId: string): TournamentData
     matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId)),
     tournamentApplications: data.tournamentApplications,
     newsPosts: data.newsPosts,
-    mediaItems: data.mediaItems
+    mediaItems: data.mediaItems,
+    sponsors: data.sponsors,
+    teamStaff: data.teamStaff.filter((staff) => staff.teamId !== teamId),
+    adminNotificationReads: data.adminNotificationReads
   };
 }
 
@@ -225,7 +231,20 @@ export function deleteTournament(data: TournamentData, tournamentId: string): To
     matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId),
     tournamentApplications: data.tournamentApplications.filter((application) => application.tournamentId !== tournamentId),
     newsPosts: data.newsPosts.map((post) => (post.tournamentId === tournamentId ? { ...post, tournamentId: undefined } : post)),
-    mediaItems: data.mediaItems.map((item) => (item.tournamentId === tournamentId ? { ...item, tournamentId: undefined } : item))
+    mediaItems: data.mediaItems.map((item) => (item.tournamentId === tournamentId ? { ...item, tournamentId: undefined } : item)),
+    sponsors: data.sponsors.map((sponsor) => (sponsor.tournamentId === tournamentId ? { ...sponsor, tournamentId: undefined } : sponsor)),
+    teamStaff: data.teamStaff.filter((staff) => staff.tournamentId !== tournamentId),
+    adminNotificationReads: data.adminNotificationReads
+  };
+}
+
+export function upsertAdminNotificationRead(data: TournamentData, read: AdminNotificationRead): TournamentData {
+  const exists = data.adminNotificationReads.some((item) => item.userId === read.userId && item.notificationKey === read.notificationKey);
+  return {
+    ...data,
+    adminNotificationReads: exists
+      ? data.adminNotificationReads.map((item) => (item.userId === read.userId && item.notificationKey === read.notificationKey ? read : item))
+      : [...data.adminNotificationReads, read]
   };
 }
 
@@ -275,6 +294,38 @@ export function deleteMediaItem(data: TournamentData, itemId: string): Tournamen
   return {
     ...data,
     mediaItems: data.mediaItems.filter((item) => item.id !== itemId)
+  };
+}
+
+export function upsertSponsor(data: TournamentData, sponsor: Sponsor): TournamentData {
+  const exists = data.sponsors.some((item) => item.id === sponsor.id);
+  const sponsors = exists ? data.sponsors.map((item) => (item.id === sponsor.id ? sponsor : item)) : [...data.sponsors, sponsor];
+  return {
+    ...data,
+    sponsors: [...sponsors].sort((first, second) => first.tier.localeCompare(second.tier) || first.name.localeCompare(second.name))
+  };
+}
+
+export function deleteSponsor(data: TournamentData, sponsorId: string): TournamentData {
+  return {
+    ...data,
+    sponsors: data.sponsors.filter((sponsor) => sponsor.id !== sponsorId)
+  };
+}
+
+export function upsertTeamStaff(data: TournamentData, staff: TeamStaff): TournamentData {
+  const exists = data.teamStaff.some((item) => item.id === staff.id);
+  const teamStaff = exists ? data.teamStaff.map((item) => (item.id === staff.id ? staff : item)) : [...data.teamStaff, staff];
+  return {
+    ...data,
+    teamStaff: [...teamStaff].sort((first, second) => first.teamId.localeCompare(second.teamId) || first.role.localeCompare(second.role) || first.name.localeCompare(second.name))
+  };
+}
+
+export function deleteTeamStaff(data: TournamentData, staffId: string): TournamentData {
+  return {
+    ...data,
+    teamStaff: data.teamStaff.filter((staff) => staff.id !== staffId)
   };
 }
 
