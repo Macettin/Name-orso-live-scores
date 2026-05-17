@@ -76,7 +76,7 @@ export default function Home() {
               <div className="mt-4 grid gap-3">
                 <Link
                   href="/apply"
-                  className="inline-flex w-full items-center justify-center rounded-lg border border-white/30 bg-white px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50"
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-white/30 bg-white/10 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-white/18"
                 >
                   Apply / join tournament
                 </Link>
