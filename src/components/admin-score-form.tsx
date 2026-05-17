@@ -1970,7 +1970,11 @@ export function AdminScoreForm() {
               <p className="text-sm text-slate-400">
                 {team.sport} - {team.group}
               </p>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/reports/team-roster/${team.id}`} className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+                  <Printer size={14} aria-hidden="true" />
+                  Roster sheet
+                </Link>
                 <button
                   onClick={() => {
                     setTeamForm({ ...team, logoUrl: team.logoUrl ?? "" });
@@ -2151,6 +2155,10 @@ export function AdminScoreForm() {
                         <Printer size={16} aria-hidden="true" />
                         Print preview
                       </button>
+                      <Link href={`/reports/team-roster/${team.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                        <Printer size={16} aria-hidden="true" />
+                        Roster sheet
+                      </Link>
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

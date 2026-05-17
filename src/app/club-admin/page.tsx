@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Lock, LogOut, Pencil, Plus, Printer, Save, Send, Trash2, X } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -698,6 +699,13 @@ export default function ClubAdminPage() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/reports/team-roster/${selectedTeam.id}`}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/60 bg-white/70 px-4 py-2 text-sm font-black text-slate-800 hover:bg-white"
+                  >
+                    <Printer size={16} aria-hidden="true" />
+                    Roster sheet
+                  </Link>
                   <button
                     type="button"
                     onClick={() => {
