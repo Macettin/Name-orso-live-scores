@@ -74,6 +74,7 @@ import {
   updateSupabaseTournamentApplication,
   updateSupabaseTournamentApplicationStatus,
   uploadSupabasePlayerPhoto,
+  uploadSupabaseNewsImage,
   uploadSupabaseTeamLogo
 } from "@/lib/supabase";
 import type { AdminNotificationRead, Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerStatKey, Sponsor, Team, TeamAdminAssignment, TeamStaff, Tournament, TournamentApplication, TournamentApplicationStatus, UserProfile } from "@/lib/types";
@@ -322,6 +323,7 @@ function useTournamentDataState() {
     },
     uploadPlayerPhoto: uploadSupabasePlayerPhoto,
     uploadTeamLogo: uploadSupabaseTeamLogo,
+    uploadNewsImage: uploadSupabaseNewsImage,
     saveTournament: (tournament: Tournament) => persist(() => saveSupabaseTournament(tournament), upsertTournament(data, tournament)),
     removeTournament: (tournamentId: string) => {
       if (selectedTournamentId === tournamentId) {

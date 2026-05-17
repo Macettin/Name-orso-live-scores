@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, Bell, CheckCircle2, Copy, Eye, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Copy, Eye, ImageUp, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
 import { createId, getMatchTeamStats, type TournamentData } from "@/lib/data-store";
 import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
@@ -77,7 +77,8 @@ type MatchForm = Pick<
   "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report" | "phase" | "roundLabel"
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status" | "logoUrl" | "primaryColor" | "sponsorName" | "sponsorLogoUrl">;
-type NewsPostForm = Pick<NewsPost, "id" | "title" | "summary" | "content" | "imageUrl" | "category" | "publishedAt" | "isPublished"> & {
+type NewsPostForm = Pick<NewsPost, "id" | "title" | "summary" | "content" | "category" | "publishedAt" | "isPublished"> & {
+  imageUrl: string;
   tournamentId: string;
 };
 type MediaItemForm = Pick<MediaItem, "id" | "title" | "type" | "publishedAt" | "isPublished"> & {
@@ -827,6 +828,7 @@ export function AdminScoreForm() {
     removeTournament,
     saveTeam,
     uploadTeamLogo,
+    uploadNewsImage,
     removeTeam,
     savePlayer,
     uploadPlayerPhoto,
@@ -871,6 +873,7 @@ export function AdminScoreForm() {
     awayTeamId: data.teams[1]?.id ?? data.teams[0]?.id ?? ""
   }));
   const [newsPostForm, setNewsPostForm] = useState<NewsPostForm>(() => ({ ...emptyNewsPost }));
+  const [newsImageFile, setNewsImageFile] = useState<File | null>(null);
   const [mediaItemForm, setMediaItemForm] = useState<MediaItemForm>(() => ({ ...emptyMediaItem }));
   const [sponsorForm, setSponsorForm] = useState<SponsorForm>(emptySponsor);
   const [teamStaffForm, setTeamStaffForm] = useState<TeamStaffForm>(() => ({ ...emptyTeamStaff, teamId: data.teams[0]?.id ?? "" }));
@@ -967,6 +970,8 @@ export function AdminScoreForm() {
     [data.adminNotificationReads, profile?.id]
   );
   const unreadNotifications = adminNotifications.filter((notification) => !readNotificationKeys.has(notification.key));
+  const newsImagePreviewUrl = useMemo(() => (newsImageFile ? URL.createObjectURL(newsImageFile) : ""), [newsImageFile]);
+  const newsPreviewImageUrl = newsImagePreviewUrl || newsPostForm.imageUrl.trim();
   const selectedLineupPlayerKey = selectedLineupPlayers.map((player) => player.id).join(":");
   const selectedLineupEntryKey = selectedLineupEntries.map((entry) => `${entry.playerId}:${entry.role}:${entry.x ?? ""}:${entry.y ?? ""}:${entry.formation ?? ""}`).join("|");
   const selectedPlayerStatMatchTeams = selectedPlayerStatMatch
@@ -1047,6 +1052,14 @@ export function AdminScoreForm() {
     const interval = window.setInterval(() => setClockPreviewNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, [selectedScoreMatch?.id, selectedScoreMatch?.clockRunning, selectedScoreMatch?.clockStartedAt]);
+
+  useEffect(() => {
+    if (!newsImagePreviewUrl) {
+      return;
+    }
+
+    return () => URL.revokeObjectURL(newsImagePreviewUrl);
+  }, [newsImagePreviewUrl]);
 
   useEffect(() => {
     function applyHashSection() {
@@ -1150,20 +1163,32 @@ export function AdminScoreForm() {
     );
   }
 
-  function submitNewsPost(event: React.FormEvent<HTMLFormElement>) {
+  async function submitNewsPost(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!newsPostForm.title.trim() || !newsPostForm.summary.trim() || !newsPostForm.content.trim() || !newsPostForm.imageUrl.trim()) {
-      setMessage("Title, summary, body, and image URL are required for news posts.");
+    if (!newsPostForm.title.trim() || !newsPostForm.summary.trim() || !newsPostForm.content.trim()) {
+      setMessage("Title, summary, and body are required for news posts.");
       return;
     }
 
+    const postId = newsPostForm.id || createId("news", newsPostForm.title);
+    let imageUrl = newsPostForm.imageUrl.trim() || undefined;
+
+    if (newsImageFile) {
+      try {
+        imageUrl = await uploadNewsImage(postId, newsImageFile);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not upload news image.");
+        return;
+      }
+    }
+
     const post: NewsPost = {
-      id: newsPostForm.id || createId("news", newsPostForm.title),
+      id: postId,
       title: newsPostForm.title.trim(),
       summary: newsPostForm.summary.trim(),
       content: newsPostForm.content.trim(),
-      imageUrl: newsPostForm.imageUrl.trim(),
+      imageUrl,
       category: newsPostForm.category,
       tournamentId: newsPostForm.tournamentId || undefined,
       publishedAt: new Date(newsPostForm.publishedAt || Date.now()).toISOString(),
@@ -1172,6 +1197,7 @@ export function AdminScoreForm() {
 
     saveNewsPost(post);
     setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
+    setNewsImageFile(null);
     setMessage(`Saved news post: ${post.title}`);
   }
 
@@ -1181,12 +1207,13 @@ export function AdminScoreForm() {
       title: post.title,
       summary: post.summary,
       content: post.content,
-      imageUrl: post.imageUrl,
+      imageUrl: post.imageUrl ?? "",
       category: post.category,
       tournamentId: post.tournamentId ?? "",
       publishedAt: post.publishedAt.slice(0, 16),
       isPublished: post.isPublished
     });
+    setNewsImageFile(null);
     setActiveAdminSection("news");
   }
 
@@ -1194,6 +1221,7 @@ export function AdminScoreForm() {
     removeNewsPost(post.id);
     if (newsPostForm.id === post.id) {
       setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
+      setNewsImageFile(null);
     }
     setMessage(`Deleted news post: ${post.title}`);
   }
@@ -2460,7 +2488,13 @@ export function AdminScoreForm() {
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("News / Announcements", "Publish premium tournament news, results, announcements, and media updates with one image.")}
           {newsPostForm.id ? (
-            <button onClick={() => setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) })} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+            <button
+              onClick={() => {
+                setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
+                setNewsImageFile(null);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+            >
               <X size={16} aria-hidden="true" />
               Cancel edit
             </button>
@@ -2497,9 +2531,32 @@ export function AdminScoreForm() {
             <textarea value={newsPostForm.summary} onChange={(event) => setNewsPostForm({ ...newsPostForm, summary: event.target.value })} className={inputClass()} rows={3} />
           </label>
           <label className="md:col-span-2">
-            <span className={labelClass()}>Image URL</span>
+            <span className={labelClass()}>Image URL fallback</span>
             <input value={newsPostForm.imageUrl} onChange={(event) => setNewsPostForm({ ...newsPostForm, imageUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
           </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Upload image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setNewsImageFile(event.target.files?.[0] ?? null)}
+              className="mt-2 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-black file:text-blue-700 hover:file:bg-blue-100"
+            />
+            <p className="mt-2 text-xs font-semibold text-slate-400">Uploaded images are stored in the news-images bucket. If no file is selected, the URL field is used.</p>
+          </label>
+          <div className="md:col-span-4">
+            <span className={labelClass()}>Image preview</span>
+            <div className="mt-2 overflow-hidden rounded-xl border border-blue-100 bg-blue-50">
+              <div className={clsx("flex aspect-[16/7] min-h-44 items-center justify-center bg-cover bg-center text-center text-2xl font-black text-blue-700", !newsPreviewImageUrl && "bg-[linear-gradient(135deg,#eff6ff_0%,#dbeafe_48%,#ffffff_100%)]")} style={newsPreviewImageUrl ? { backgroundImage: `url(${newsPreviewImageUrl})` } : undefined}>
+                {!newsPreviewImageUrl ? (
+                  <span className="inline-flex items-center gap-2">
+                    <ImageUp size={24} aria-hidden="true" />
+                    Orso News
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
           <label>
             <span className={labelClass()}>Published at</span>
             <input type="datetime-local" value={newsPostForm.publishedAt} onChange={(event) => setNewsPostForm({ ...newsPostForm, publishedAt: event.target.value })} className={inputClass()} />
@@ -2524,7 +2581,12 @@ export function AdminScoreForm() {
             const postTournament = post.tournamentId ? data.tournaments.find((tournament) => tournament.id === post.tournamentId) : undefined;
             return (
               <div key={post.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <div className="aspect-[16/9] bg-blue-50 bg-cover bg-center" style={{ backgroundImage: `url(${post.imageUrl})` }} />
+                <div
+                  className={clsx("flex aspect-[16/9] items-center justify-center bg-blue-50 bg-cover bg-center text-lg font-black text-blue-700", !post.imageUrl && "bg-[linear-gradient(135deg,#eff6ff_0%,#dbeafe_48%,#ffffff_100%)]")}
+                  style={post.imageUrl ? { backgroundImage: `url(${post.imageUrl})` } : undefined}
+                >
+                  {!post.imageUrl ? "Orso News" : null}
+                </div>
                 <div className="p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">{post.category}</span>

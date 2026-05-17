@@ -234,7 +234,7 @@ type NewsPostRow = {
   title: string;
   summary: string;
   content: string;
-  image_url: string;
+  image_url: string | null;
   category: NewsCategory;
   tournament_id: string | null;
   published_at: string;
@@ -482,7 +482,7 @@ function mapNewsPost(row: NewsPostRow): NewsPost {
     title: row.title,
     summary: row.summary,
     content: row.content,
-    imageUrl: row.image_url,
+    imageUrl: row.image_url ?? undefined,
     category: row.category,
     tournamentId: row.tournament_id ?? undefined,
     publishedAt: row.published_at,
@@ -1026,6 +1026,22 @@ export async function uploadSupabaseTeamLogo(teamId: string, file: File) {
   return data.publicUrl;
 }
 
+export async function uploadSupabaseNewsImage(postId: string, file: File) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const path = `${postId}/${Date.now().toString(36)}.${extension}`;
+  const { error } = await supabase.storage.from("news-images").upload(path, file, {
+    cacheControl: "3600",
+    upsert: true
+  });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from("news-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function deleteSupabasePlayer(playerId: string) {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -1382,7 +1398,7 @@ export async function saveSupabaseNewsPost(post: NewsPost) {
     title: post.title,
     summary: post.summary,
     content: post.content,
-    image_url: post.imageUrl,
+    image_url: post.imageUrl || null,
     category: post.category,
     tournament_id: post.tournamentId || null,
     published_at: post.publishedAt,

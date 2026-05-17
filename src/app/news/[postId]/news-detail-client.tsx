@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
-import { formatNewsDate, NewsCard } from "@/components/news-card";
+import { formatNewsDate, newsImagePlaceholderClass, NewsCard } from "@/components/news-card";
 import { PageHeader } from "@/components/ui";
 import { slugify } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -28,6 +28,7 @@ export default function NewsDetailClient({ postId }: { postId: string }) {
   }
 
   const tournament = post.tournamentId ? data.tournaments.find((item) => item.id === post.tournamentId) : undefined;
+  const imageUrl = post.imageUrl?.trim();
 
   return (
     <main className="grid gap-6 pb-8">
@@ -44,8 +45,14 @@ export default function NewsDetailClient({ postId }: { postId: string }) {
         }
       />
       <article className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-[0_22px_58px_rgba(37,99,235,0.12)]">
-        <div className="relative aspect-[16/8] min-h-56 bg-blue-50">
-          <div aria-hidden="true" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${post.imageUrl})` }} />
+        <div className={`relative aspect-[16/8] min-h-56 bg-blue-50 ${imageUrl ? "" : newsImagePlaceholderClass}`}>
+          {imageUrl ? (
+            <div aria-hidden="true" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${imageUrl})` }} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center px-4 text-center text-3xl font-black text-blue-700">
+              Orso News
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/58 via-transparent to-transparent" />
           <div className="absolute bottom-4 left-4 flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-black uppercase tracking-wide text-white">{post.category}</span>

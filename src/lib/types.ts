@@ -109,7 +109,7 @@ export type NewsPost = {
   title: string;
   summary: string;
   content: string;
-  imageUrl: string;
+  imageUrl?: string;
   category: NewsCategory;
   tournamentId?: string;
   publishedAt: string;
