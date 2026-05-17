@@ -13,6 +13,8 @@ export const rosterStatusOptions = ["Draft", "Submitted", "Approved", "Needs cha
 export type RosterStatus = (typeof rosterStatusOptions)[number];
 export const tournamentApplicationStatusOptions = ["new", "contacted", "waiting_for_confirmation", "accepted", "rejected"] as const;
 export type TournamentApplicationStatus = (typeof tournamentApplicationStatusOptions)[number];
+export const newsCategoryOptions = ["News", "Announcement", "Result", "Media"] as const;
+export type NewsCategory = (typeof newsCategoryOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
@@ -94,6 +96,20 @@ export type TournamentApplication = {
   status: TournamentApplicationStatus;
   lastContactedAt?: string;
   createdAt?: string;
+};
+
+export type NewsPost = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  imageUrl: string;
+  category: NewsCategory;
+  tournamentId?: string;
+  publishedAt: string;
+  isPublished: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Player = {

@@ -1,5 +1,5 @@
 import { matchTeamStatKeys } from "./types";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, NewsPost, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
 
 export type TournamentData = {
   tournaments: Tournament[];
@@ -13,6 +13,7 @@ export type TournamentData = {
   officials: Official[];
   matchOfficials: MatchOfficialAssignment[];
   tournamentApplications: TournamentApplication[];
+  newsPosts: NewsPost[];
 };
 
 export function slugify(value: string) {
@@ -79,7 +80,8 @@ export function deleteTeam(data: TournamentData, teamId: string): TournamentData
     matchTeamStats: data.matchTeamStats.filter((stat) => stat.teamId !== teamId && !removedMatchIds.has(stat.matchId)),
     officials: data.officials,
     matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId)),
-    tournamentApplications: data.tournamentApplications
+    tournamentApplications: data.tournamentApplications,
+    newsPosts: data.newsPosts
   };
 }
 
@@ -219,7 +221,8 @@ export function deleteTournament(data: TournamentData, tournamentId: string): To
     matchTeamStats: data.matchTeamStats.filter((stat) => stat.tournamentId !== tournamentId),
     officials: data.officials.filter((official) => official.tournamentId !== tournamentId),
     matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId),
-    tournamentApplications: data.tournamentApplications.filter((application) => application.tournamentId !== tournamentId)
+    tournamentApplications: data.tournamentApplications.filter((application) => application.tournamentId !== tournamentId),
+    newsPosts: data.newsPosts.map((post) => (post.tournamentId === tournamentId ? { ...post, tournamentId: undefined } : post))
   };
 }
 
@@ -237,6 +240,22 @@ export function deleteTournamentApplication(data: TournamentData, applicationId:
   return {
     ...data,
     tournamentApplications: data.tournamentApplications.filter((application) => application.id !== applicationId)
+  };
+}
+
+export function upsertNewsPost(data: TournamentData, post: NewsPost): TournamentData {
+  const exists = data.newsPosts.some((item) => item.id === post.id);
+  const newsPosts = exists ? data.newsPosts.map((item) => (item.id === post.id ? post : item)) : [...data.newsPosts, post];
+  return {
+    ...data,
+    newsPosts: [...newsPosts].sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+  };
+}
+
+export function deleteNewsPost(data: TournamentData, postId: string): TournamentData {
+  return {
+    ...data,
+    newsPosts: data.newsPosts.filter((post) => post.id !== postId)
   };
 }
 

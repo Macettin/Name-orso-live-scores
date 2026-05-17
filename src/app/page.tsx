@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Activity, CalendarDays, FileText, ShieldCheck } from "lucide-react";
 import { MatchCard } from "@/components/match-card";
+import { NewsCard } from "@/components/news-card";
 import { Card, TournamentCoverBanner } from "@/components/ui";
 import { buildStandings } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -13,6 +14,10 @@ export default function Home() {
   const nextFixtures = data.matches.filter((match) => match.status === "Scheduled").slice(0, 3);
   const standings = buildStandings(data);
   const tournament = data.tournaments.find((item) => item.id === selectedTournamentId);
+  const latestNews = data.newsPosts
+    .filter((post) => post.isPublished)
+    .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+    .slice(0, 3);
   const scoreboardMatch = liveMatches[0] ?? nextFixtures[0] ?? data.matches[0];
   const heroChips = [
     { label: "Live scores", href: "/live" },
@@ -155,6 +160,24 @@ export default function Home() {
         </Card>
       </div>
       <TournamentCoverBanner tournament={tournament} />
+      <section className="mt-8 rounded-lg border border-blue-100 bg-white p-4 shadow-[0_16px_42px_rgba(37,99,235,0.08)] sm:p-5">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Newsroom</p>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Latest news and announcements</h2>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {latestNews.map((post) => (
+            <NewsCard key={post.id} post={post} />
+          ))}
+          {latestNews.length === 0 ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-3">
+              Published tournament news will appear here.
+            </p>
+          ) : null}
+        </div>
+      </section>
       <section className="mt-8 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-4">
           <div className="mb-4 flex items-center justify-between">

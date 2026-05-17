@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ExternalLink, GitBranch, MapPin, PlayCircle, Radio, Shield, Star, Trophy, Users } from "lucide-react";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
+import { NewsCard } from "@/components/news-card";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
@@ -227,6 +228,10 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
   const players = data.players.filter((player) => player.tournamentId === tournament.id || teamIds.has(player.teamId));
   const liveMatches = matches.filter((match) => match.status === "Live").slice(0, 4);
   const upcomingFixtures = matches.filter((match) => match.status === "Scheduled").slice(0, 5);
+  const tournamentNews = data.newsPosts
+    .filter((post) => post.isPublished && post.tournamentId === tournament.id)
+    .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+    .slice(0, 3);
   const streamMatch = matches.find((match) => match.youtubeUrl);
   const standings = buildStandings({ ...data, teams, matches }).filter((standing) => teamIds.has(standing.teamId)).sort((first, second) => second.tournamentPoints - first.tournamentPoints).slice(0, 5);
   const scorers = topScorers(players);
@@ -300,6 +305,16 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
       </section>
 
       <SponsorStrip tournament={tournament} accent={accent} />
+
+      {tournamentNews.length > 0 ? (
+        <SectionShell eyebrow="Newsroom" title="Tournament updates">
+          <div className="grid gap-4 md:grid-cols-3">
+            {tournamentNews.map((post) => (
+              <NewsCard key={post.id} post={post} />
+            ))}
+          </div>
+        </SectionShell>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
         <SectionShell eyebrow="Live now" title="Latest live matches">

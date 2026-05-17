@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type NewsCategory, type NewsPost, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Team, type TeamAdmin, type TeamAdminAssignment, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -229,6 +229,20 @@ type TournamentRow = {
   sponsor_logo_url: string | null;
 };
 
+type NewsPostRow = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  image_url: string;
+  category: NewsCategory;
+  tournament_id: string | null;
+  published_at: string;
+  is_published: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type TeamAdminRow = {
   user_id: string;
   team_id: string;
@@ -417,6 +431,22 @@ function mapTournamentApplication(row: TournamentApplicationRow): TournamentAppl
   };
 }
 
+function mapNewsPost(row: NewsPostRow): NewsPost {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    content: row.content,
+    imageUrl: row.image_url,
+    category: row.category,
+    tournamentId: row.tournament_id ?? undefined,
+    publishedAt: row.published_at,
+    isPublished: row.is_published ?? false,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  };
+}
+
 function mapPlayerMatchStat(row: MatchStatRow): PlayerMatchStat | null {
   if (!row.player_id || !playerStatKeys.includes(row.stat_key as PlayerStatKey)) {
     return null;
@@ -466,7 +496,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     { data: matchStatRows, error: matchStatError },
     { data: matchTeamStatsRows, error: matchTeamStatsError },
     { data: officialRows, error: officialError },
-    applicationResult
+    applicationResult,
+    newsPostResult
   ] = await Promise.all([
     supabase.from("tournaments").select("id,name,sport_type,location,start_date,end_date,status,logo_url,primary_color,sponsor_name,sponsor_logo_url").order("start_date").order("name"),
     supabase
@@ -488,7 +519,11 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     supabase
       .from("tournament_applications")
       .select("id,tournament_id,team_id,created_team_id,name_surname,club,phone,email,estimated_players,age_group,estimated_staff,country,city,sport,notes,admin_note,status,last_contacted_at,created_at")
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("news_posts")
+      .select("id,title,summary,content,image_url,category,tournament_id,published_at,is_published,created_at,updated_at")
+      .order("published_at", { ascending: false })
   ]);
 
   if (tournamentError) throw tournamentError;
@@ -496,6 +531,7 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
   if (matchTeamStatsError && !isMissingRelationError(matchTeamStatsError)) throw matchTeamStatsError;
   if (officialError && !isMissingRelationError(officialError) && !(officialError.code === "PGRST204" || officialError.code === "42703")) throw officialError;
   if (applicationResult.error && !isMissingRelationError(applicationResult.error) && !(applicationResult.error.code === "PGRST204" || applicationResult.error.code === "42703")) throw applicationResult.error;
+  if (newsPostResult.error && !isMissingRelationError(newsPostResult.error) && !(newsPostResult.error.code === "PGRST204" || newsPostResult.error.code === "42703")) throw newsPostResult.error;
 
   let teamRows = teamResult.data as TeamRow[] | null;
   if (teamResult.error && (teamResult.error.code === "PGRST204" || teamResult.error.code === "42703")) {
@@ -626,7 +662,8 @@ export async function fetchSupabaseTournamentData(tournamentId = "main-tournamen
     matchTeamStats: matchTeamStatsError ? [] : ((matchTeamStatsRows ?? []) as MatchTeamStatsRow[]).map(mapMatchTeamStats),
     officials: officialError ? [] : ((officialRows ?? []) as OfficialRow[]).map(mapOfficial),
     matchOfficials: matchOfficialError ? [] : ((matchOfficialRows ?? []) as MatchOfficialRow[]).map(mapMatchOfficial),
-    tournamentApplications: applicationLoadError ? [] : ((applicationRows ?? []) as TournamentApplicationRow[]).map(mapTournamentApplication)
+    tournamentApplications: applicationLoadError ? [] : ((applicationRows ?? []) as TournamentApplicationRow[]).map(mapTournamentApplication),
+    newsPosts: newsPostResult.error ? [] : ((newsPostResult.data ?? []) as NewsPostRow[]).map(mapNewsPost)
   };
 }
 
@@ -1204,5 +1241,31 @@ export async function deleteSupabaseTournamentApplication(applicationId: string)
   if (!supabase) throw new Error("Supabase is not configured.");
 
   const { error } = await supabase.from("tournament_applications").delete().eq("id", applicationId);
+  if (error) throw error;
+}
+
+export async function saveSupabaseNewsPost(post: NewsPost) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("news_posts").upsert({
+    id: post.id,
+    title: post.title,
+    summary: post.summary,
+    content: post.content,
+    image_url: post.imageUrl,
+    category: post.category,
+    tournament_id: post.tournamentId || null,
+    published_at: post.publishedAt,
+    is_published: post.isPublished
+  });
+  if (error) throw error;
+}
+
+export async function deleteSupabaseNewsPost(postId: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { error } = await supabase.from("news_posts").delete().eq("id", postId);
   if (error) throw error;
 }

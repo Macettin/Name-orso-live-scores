@@ -9,6 +9,7 @@ import {
   deleteTournamentApplication,
   deleteTournament,
   deleteOfficial,
+  deleteNewsPost,
   addPlayerMatchStat,
   upsertMatchTeamStats,
   upsertMatchLineups,
@@ -21,7 +22,8 @@ import {
   upsertPlayer,
   upsertTeam,
   upsertTournamentApplication,
-  upsertTournament
+  upsertTournament,
+  upsertNewsPost
 } from "@/lib/data-store";
 import {
   assignSupabaseClubAdmin,
@@ -33,6 +35,7 @@ import {
   deleteSupabaseTeamAdminAssignment,
   deleteSupabaseTournamentApplication,
   deleteSupabaseTournament,
+  deleteSupabaseNewsPost,
   fetchSupabaseMyTeamAdmins,
   fetchSupabaseTeamAdminAssignments,
   fetchSupabaseTournamentData,
@@ -50,6 +53,7 @@ import {
   saveSupabaseScore,
   saveSupabaseTeam,
   saveSupabaseTournament,
+  saveSupabaseNewsPost,
   signInWithEmail,
   signOut,
   submitSupabaseTournamentApplication,
@@ -58,7 +62,7 @@ import {
   uploadSupabasePlayerPhoto,
   uploadSupabaseTeamLogo
 } from "@/lib/supabase";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, Official, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, TournamentApplication, TournamentApplicationStatus, UserProfile } from "@/lib/types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, NewsPost, Official, Player, PlayerStatKey, Team, TeamAdminAssignment, Tournament, TournamentApplication, TournamentApplicationStatus, UserProfile } from "@/lib/types";
 
 const emptyTournamentData: TournamentData = {
   tournaments: [],
@@ -71,7 +75,8 @@ const emptyTournamentData: TournamentData = {
   matchTeamStats: [],
   officials: [],
   matchOfficials: [],
-  tournamentApplications: []
+  tournamentApplications: [],
+  newsPosts: []
 };
 const defaultTournamentId = "main-tournament";
 const selectedTournamentStorageKey = "orso-selected-tournament";
@@ -207,6 +212,7 @@ function useTournamentDataState() {
       .on("postgres_changes", { event: "*", schema: "public", table: "officials" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_officials" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournament_applications" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "news_posts" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "tournaments" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "team_admins" }, () => void syncProfile())
@@ -394,7 +400,11 @@ function useTournamentDataState() {
       );
     },
     removeTournamentApplication: (applicationId: string) =>
-      persist(() => deleteSupabaseTournamentApplication(applicationId), deleteTournamentApplication(data, applicationId))
+      persist(() => deleteSupabaseTournamentApplication(applicationId), deleteTournamentApplication(data, applicationId)),
+    saveNewsPost: (post: NewsPost) =>
+      persist(() => saveSupabaseNewsPost(post), upsertNewsPost(data, post)),
+    removeNewsPost: (postId: string) =>
+      persist(() => deleteSupabaseNewsPost(postId), deleteNewsPost(data, postId))
   };
 }
 

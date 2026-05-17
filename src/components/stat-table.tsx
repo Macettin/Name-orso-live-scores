@@ -31,7 +31,7 @@ function PlayerAvatar({ player }: { player: Player }) {
 }
 
 export function PlayerStatTable({ players, teams }: { players: Player[]; teams: Team[] }) {
-  const lookupData = { tournaments: [], teams, players: [], matches: [], events: [], matchLineups: [], playerMatchStats: [], matchTeamStats: [], officials: [], matchOfficials: [], tournamentApplications: [] } satisfies TournamentData;
+  const lookupData = { tournaments: [], teams, players: [], matches: [], events: [], matchLineups: [], playerMatchStats: [], matchTeamStats: [], officials: [], matchOfficials: [], tournamentApplications: [], newsPosts: [] } satisfies TournamentData;
   const visibleStats = Array.from(
     new Set(
       players.flatMap((player) => {

@@ -14,6 +14,7 @@ import {
   matchTeamStatKeys,
   matchTeamStatLabels,
   matchPhaseOptions,
+  newsCategoryOptions,
   officialRoleOptions,
   sportOptions,
   tournamentSportOptions,
@@ -26,6 +27,8 @@ import {
   type MatchEventType,
   type MatchPhase,
   type MatchStatus,
+  type NewsCategory,
+  type NewsPost,
   type Official,
   type OfficialRole,
   type Player,
@@ -65,6 +68,9 @@ type MatchForm = Pick<
   "id" | "homeTeamId" | "awayTeamId" | "date" | "time" | "court" | "status" | "homeScore" | "awayScore" | "periodLabel" | "matchMinute" | "clockLabel" | "clockRunning" | "youtubeUrl" | "report" | "phase" | "roundLabel"
 >;
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status" | "logoUrl" | "primaryColor" | "sponsorName" | "sponsorLogoUrl">;
+type NewsPostForm = Pick<NewsPost, "id" | "title" | "summary" | "content" | "imageUrl" | "category" | "publishedAt" | "isPublished"> & {
+  tournamentId: string;
+};
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
 type SubstitutionForm = {
   matchId: string;
@@ -147,6 +153,18 @@ const emptyMatch: MatchForm = {
   report: ""
 };
 
+const emptyNewsPost: NewsPostForm = {
+  id: "",
+  title: "",
+  summary: "",
+  content: "",
+  imageUrl: "",
+  category: "News",
+  tournamentId: "",
+  publishedAt: new Date().toISOString().slice(0, 16),
+  isPublished: true
+};
+
 const emptyEvent: EventForm = {
   matchId: "",
   teamId: "",
@@ -187,6 +205,7 @@ type AdminSection =
   | "match_stats"
   | "fixture_builder"
   | "club_admins"
+  | "news"
   | "reports";
 
 const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminOnly?: boolean }[] = [
@@ -206,6 +225,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "match_stats", label: "Match Stats", scorer: true },
   { id: "fixture_builder", label: "Fixture Builder", adminOnly: true },
   { id: "club_admins", label: "Club Admins", adminOnly: true },
+  { id: "news", label: "News / Announcements", adminOnly: true },
   { id: "reports", label: "Reports", adminOnly: true }
 ];
 
@@ -237,8 +257,8 @@ const adminSectionGroups: {
   },
   {
     title: "Reports & Media",
-    description: "Printable outputs, QR sharing, and match sheets.",
-    sections: ["reports"],
+    description: "News publishing, printable outputs, QR sharing, and match sheets.",
+    sections: ["news", "reports"],
     links: [{ label: "QR Print", href: "/qr-print" }]
   }
 ];
@@ -629,6 +649,8 @@ export function AdminScoreForm() {
     removeEvent,
     saveTournamentApplicationFollowUp,
     removeTournamentApplication,
+    saveNewsPost,
+    removeNewsPost,
     assignClubAdmin,
     removeClubAdminAssignment,
     clubAdminAssignments
@@ -646,6 +668,7 @@ export function AdminScoreForm() {
     homeTeamId: data.teams[0]?.id ?? "",
     awayTeamId: data.teams[1]?.id ?? data.teams[0]?.id ?? ""
   }));
+  const [newsPostForm, setNewsPostForm] = useState<NewsPostForm>(() => ({ ...emptyNewsPost }));
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedTeamStatsMatchId, setSelectedTeamStatsMatchId] = useState(() => data.matches[0]?.id ?? "");
@@ -901,6 +924,54 @@ export function AdminScoreForm() {
       compactScorerMode && "min-h-12 px-4 py-3 text-base font-black",
       tones[tone]
     );
+  }
+
+  function submitNewsPost(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!newsPostForm.title.trim() || !newsPostForm.summary.trim() || !newsPostForm.content.trim() || !newsPostForm.imageUrl.trim()) {
+      setMessage("Title, summary, body, and image URL are required for news posts.");
+      return;
+    }
+
+    const post: NewsPost = {
+      id: newsPostForm.id || createId("news", newsPostForm.title),
+      title: newsPostForm.title.trim(),
+      summary: newsPostForm.summary.trim(),
+      content: newsPostForm.content.trim(),
+      imageUrl: newsPostForm.imageUrl.trim(),
+      category: newsPostForm.category,
+      tournamentId: newsPostForm.tournamentId || undefined,
+      publishedAt: new Date(newsPostForm.publishedAt || Date.now()).toISOString(),
+      isPublished: newsPostForm.isPublished
+    };
+
+    saveNewsPost(post);
+    setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
+    setMessage(`Saved news post: ${post.title}`);
+  }
+
+  function editNewsPost(post: NewsPost) {
+    setNewsPostForm({
+      id: post.id,
+      title: post.title,
+      summary: post.summary,
+      content: post.content,
+      imageUrl: post.imageUrl,
+      category: post.category,
+      tournamentId: post.tournamentId ?? "",
+      publishedAt: post.publishedAt.slice(0, 16),
+      isPublished: post.isPublished
+    });
+    setActiveAdminSection("news");
+  }
+
+  function deleteNewsPostFromAdmin(post: NewsPost) {
+    removeNewsPost(post.id);
+    if (newsPostForm.id === post.id) {
+      setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
+    }
+    setMessage(`Deleted news post: ${post.title}`);
   }
 
   function submitTournament(event: React.FormEvent<HTMLFormElement>) {
@@ -1897,6 +1968,115 @@ export function AdminScoreForm() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("news")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("News / Announcements", "Publish premium tournament news, results, announcements, and media updates with one image.")}
+          {newsPostForm.id ? (
+            <button onClick={() => setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) })} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <X size={16} aria-hidden="true" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+        <form onSubmit={submitNewsPost} className="grid gap-4 md:grid-cols-4">
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Title</span>
+            <input value={newsPostForm.title} onChange={(event) => setNewsPostForm({ ...newsPostForm, title: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Category</span>
+            <select value={newsPostForm.category} onChange={(event) => setNewsPostForm({ ...newsPostForm, category: event.target.value as NewsCategory })} className={inputClass()}>
+              {newsCategoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Tournament</span>
+            <select value={newsPostForm.tournamentId} onChange={(event) => setNewsPostForm({ ...newsPostForm, tournamentId: event.target.value })} className={inputClass()}>
+              <option value="">General post</option>
+              {data.tournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Short summary</span>
+            <textarea value={newsPostForm.summary} onChange={(event) => setNewsPostForm({ ...newsPostForm, summary: event.target.value })} className={inputClass()} rows={3} />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Image URL</span>
+            <input value={newsPostForm.imageUrl} onChange={(event) => setNewsPostForm({ ...newsPostForm, imageUrl: event.target.value })} className={inputClass()} placeholder="https://..." />
+          </label>
+          <label>
+            <span className={labelClass()}>Published at</span>
+            <input type="datetime-local" value={newsPostForm.publishedAt} onChange={(event) => setNewsPostForm({ ...newsPostForm, publishedAt: event.target.value })} className={inputClass()} />
+          </label>
+          <label className="flex items-end gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+            <input type="checkbox" checked={newsPostForm.isPublished} onChange={(event) => setNewsPostForm({ ...newsPostForm, isPublished: event.target.checked })} className="h-5 w-5 rounded border-blue-300 text-blue-600" />
+            <span className="text-sm font-black text-blue-800">Published</span>
+          </label>
+          <label className="md:col-span-4">
+            <span className={labelClass()}>Content / body</span>
+            <textarea value={newsPostForm.content} onChange={(event) => setNewsPostForm({ ...newsPostForm, content: event.target.value })} className={inputClass()} rows={7} />
+          </label>
+          <div className="flex items-end md:col-span-4">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              {newsPostForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+              {newsPostForm.id ? "Save post" : "Create post"}
+            </button>
+          </div>
+        </form>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.newsPosts.map((post) => {
+            const postTournament = post.tournamentId ? data.tournaments.find((tournament) => tournament.id === post.tournamentId) : undefined;
+            return (
+              <div key={post.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="aspect-[16/9] bg-blue-50 bg-cover bg-center" style={{ backgroundImage: `url(${post.imageUrl})` }} />
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">{post.category}</span>
+                    <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide", post.isPublished ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                      {post.isPublished ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <p className="mt-3 break-words text-base font-black text-slate-950">{post.title}</p>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{post.summary}</p>
+                  <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-400">
+                    {new Date(post.publishedAt).toLocaleString()} {postTournament ? `/ ${postTournament.name}` : "/ General"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {post.isPublished ? (
+                      <Link href={`/news/${post.id}`} className="flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                        <Eye size={14} aria-hidden="true" />
+                        View
+                      </Link>
+                    ) : null}
+                    <button type="button" onClick={() => editNewsPost(post)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                      <Pencil size={14} aria-hidden="true" />
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => deleteNewsPostFromAdmin(post)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                      <Trash2 size={14} aria-hidden="true" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {data.newsPosts.length === 0 ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-2 xl:col-span-3">
+              No news posts yet.
+            </p>
+          ) : null}
         </div>
       </section>
 
