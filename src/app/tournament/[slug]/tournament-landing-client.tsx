@@ -314,14 +314,14 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
             {standings.map((standing, index) => {
               const team = getTeam(data, standing.teamId);
               return (
-                <div key={standing.teamId} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <Link key={standing.teamId} href={team ? `/teams/${team.id}` : "/teams"} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 transition hover:border-blue-200 hover:bg-blue-50">
                   <span className="text-sm font-black text-slate-400">{index + 1}</span>
                   <div className="flex min-w-0 items-center gap-2">
                     <TeamLogo team={team} size="h-8 w-8" />
                     <span className="orso-team-name orso-team-name-2 text-sm font-black text-slate-950">{team?.name ?? "Team"}</span>
                   </div>
                   <span className="rounded-lg bg-blue-600 px-2.5 py-1 text-sm font-black text-white">{standing.tournamentPoints} pts</span>
-                </div>
+                </Link>
               );
             })}
             {standings.length === 0 ? <p className="rounded-xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">Standings will appear after final results.</p> : null}

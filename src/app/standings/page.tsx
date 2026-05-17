@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { clsx } from "clsx";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
@@ -48,7 +49,7 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
       {standings.map((row, index) => {
         const team = getTeam(data, row.teamId);
         return (
-          <article key={row.teamId} className="orso-card p-4">
+          <Link key={row.teamId} href={team ? `/teams/${team.id}` : "/teams"} className="orso-card block p-4 transition hover:border-blue-200 hover:bg-blue-50/30">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">{index + 1}</span>
               <TeamLogo team={team} size="h-10 w-10" />
@@ -75,7 +76,7 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
                 </div>
               ))}
             </div>
-          </article>
+          </Link>
         );
       })}
     </div>
@@ -106,10 +107,10 @@ function TeamStandingsTable({ data }: { data: TournamentData }) {
                   </span>
                 </td>
                 <td className="px-4 py-3 font-semibold text-slate-900">
-                  <div className="flex min-w-56 items-center gap-3">
+                  <Link href={team ? `/teams/${team.id}` : "/teams"} className="flex min-w-56 items-center gap-3 rounded-lg transition hover:text-blue-700">
                     <TeamLogo team={team} size="h-9 w-9" />
                     <span className="orso-team-name orso-team-name-2">{team?.name}</span>
-                  </div>
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{team?.sport}</td>
                 <td className="px-4 py-3 text-slate-600">{team?.group}</td>
@@ -158,7 +159,7 @@ function Leaderboard({ data, type }: { data: TournamentData; type: "scoring" | "
             <p className="break-words text-base font-black text-slate-950">{row.player.name}</p>
             <div className="mt-1 flex min-w-0 items-center gap-2">
               <TeamLogo team={row.team} size="h-7 w-7" />
-              <p className="orso-team-name orso-team-name-2 text-sm font-semibold text-slate-500">{row.team?.name ?? "Team unavailable"}</p>
+              <Link href={row.team ? `/teams/${row.team.id}` : "/teams"} className="orso-team-name orso-team-name-2 text-sm font-semibold text-slate-500 hover:text-blue-700">{row.team?.name ?? "Team unavailable"}</Link>
             </div>
           </div>
           <div className="rounded-lg bg-blue-50 px-4 py-3 text-left sm:text-right">
