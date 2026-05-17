@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, CheckCircle2, Copy, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Eye, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
 import { createId, getMatchTeamStats } from "@/lib/data-store";
+import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
 import {
@@ -369,11 +370,11 @@ function clubAdminInviteMessage(application: { nameSurname: string; club: string
     "",
     `${application.club} has been accepted for ${tournamentName}, and your team profile has been created as ${teamName}.`,
     "",
-    "You can manage your team profile, roster, player photos, and roster submission from the Orso club admin area.",
+    "You can manage your team profile, upload your roster, add player photos, and update your team logo from the Orso club admin area.",
     "",
     `Login link: ${loginUrl}`,
     "",
-    "If you do not have an account yet, our admin team will create your Supabase Auth user first. After that, use this same email address to sign in.",
+    "If your account is not active or you cannot sign in, contact Orso Sports Events so we can activate or create your Supabase Auth account.",
     "",
     "Orso Sports Events"
   ].join("\n");
@@ -381,6 +382,84 @@ function clubAdminInviteMessage(application: { nameSurname: string; club: string
 
 function applicationMailto(email: string, subject: string, body: string) {
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function printRosterPreview({
+  team,
+  tournamentName,
+  players,
+  clubAdminEmail
+}: {
+  team: Team;
+  tournamentName: string;
+  players: Player[];
+  clubAdminEmail?: string;
+}) {
+  const escapeMarkup = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  const rosterRows = players.length
+    ? players
+        .map(
+          (player) => `
+            <tr>
+              <td>${player.number}</td>
+              <td>${escapeMarkup(player.name)}</td>
+              <td>${escapeMarkup(player.position || "-")}</td>
+              <td>${player.photoUrl ? "Uploaded" : "-"}</td>
+            </tr>
+          `
+        )
+        .join("")
+    : `<tr><td colspan="4">No players listed.</td></tr>`;
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=720");
+  if (!printWindow) return false;
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeMarkup(team.name)} roster</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
+          header { border-bottom: 2px solid #dbeafe; padding-bottom: 18px; margin-bottom: 22px; }
+          h1 { margin: 0 0 8px; font-size: 28px; }
+          p { margin: 4px 0; color: #475569; font-weight: 700; }
+          .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+          .meta div { border: 1px solid #dbeafe; border-radius: 10px; padding: 10px 12px; }
+          .label { color: #2563eb; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+          table { border-collapse: collapse; width: 100%; margin-top: 18px; font-size: 14px; }
+          th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
+          th { background: #eff6ff; color: #1d4ed8; text-transform: uppercase; font-size: 11px; letter-spacing: .12em; }
+          @media print { body { margin: 18mm; } }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>${escapeMarkup(team.name)} roster</h1>
+          <p>${escapeMarkup(tournamentName)}</p>
+        </header>
+        <section class="meta">
+          <div><div class="label">Status</div><strong>${escapeMarkup(team.rosterStatus ?? "Draft")}${team.rosterLocked ? " / Locked" : ""}</strong></div>
+          <div><div class="label">Players</div><strong>${players.length}</strong></div>
+          <div><div class="label">Submitted</div><strong>${team.rosterSubmittedAt ? escapeMarkup(new Date(team.rosterSubmittedAt).toLocaleString()) : "-"}</strong></div>
+          <div><div class="label">Club admin</div><strong>${escapeMarkup(clubAdminEmail ?? "-")}</strong></div>
+        </section>
+        ${team.rosterNote ? `<p><strong>Admin note:</strong> ${escapeMarkup(team.rosterNote)}</p>` : ""}
+        <table>
+          <thead><tr><th>#</th><th>Player</th><th>Position</th><th>Photo</th></tr></thead>
+          <tbody>${rosterRows}</tbody>
+        </table>
+        <script>window.addEventListener("load", () => window.print());</script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  return true;
 }
 
 function applicationWhatsappHref(phone: string, message: string) {
@@ -1535,6 +1614,37 @@ export function AdminScoreForm() {
     }
   }
 
+  async function sendClubAdminInvite(application: TournamentApplication, tournamentName: string, teamName: string) {
+    const email = application.email.trim();
+    if (!email) {
+      setMessage("Application email is required before sending a club admin invite.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/club-admin-invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          nameSurname: application.nameSurname,
+          club: application.club,
+          tournamentName,
+          teamName
+        })
+      });
+      const result = await response.json().catch(() => null) as { error?: string; sent?: boolean } | null;
+
+      if (!response.ok || !result?.sent) {
+        throw new Error(result?.error || "Could not send club admin invite.");
+      }
+
+      setMessage(`Club admin invite sent to ${email}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send club admin invite.");
+    }
+  }
+
   return (
     <div className={clsx("admin-dashboard grid gap-6 rounded-2xl transition-colors", adminDarkMode && "admin-dark")}>
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900">
@@ -2004,48 +2114,92 @@ export function AdminScoreForm() {
           {rosterApprovalTeams.map((team) => {
             const roster = data.players.filter((player) => player.teamId === team.id).sort((first, second) => first.number - second.number || first.name.localeCompare(second.name));
             const reviewNote = rosterReviewNotes[team.id] ?? "";
+            const tournament = data.tournaments.find((item) => item.id === team.tournamentId);
+            const tournamentName = tournament?.name ?? selectedTournament?.name ?? "Tournament";
+            const assignedAdmins = clubAdminAssignments.filter((assignment) => assignment.teamId === team.id);
+            const clubAdminEmail = assignedAdmins.map((assignment) => assignment.email).filter(Boolean).join(", ") || undefined;
             return (
-              <article key={team.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-black text-slate-950">{team.name}</h3>
-                      {rosterStatusBadge(team)}
+              <article key={team.id} className={clsx("overflow-hidden rounded-xl border bg-white shadow-sm", (team.rosterStatus ?? "Draft") === "Submitted" ? "border-blue-200 ring-1 ring-blue-100" : "border-slate-200")}>
+                <div className="border-b border-slate-100 bg-slate-50/70 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <TeamLogo team={team} size="h-14 w-14" />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words text-lg font-black text-slate-950">{team.name}</h3>
+                          {rosterStatusBadge(team)}
+                        </div>
+                        <p className="mt-1 text-sm font-semibold text-slate-600">{tournamentName}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-400">
+                          {team.sport} / {team.group} / {roster.length} player{roster.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      {team.sport} / {team.group} / {roster.length} player{roster.length === 1 ? "" : "s"}
-                    </p>
-                    {team.rosterSubmittedAt ? <p className="mt-1 text-xs font-bold text-slate-400">Submitted {new Date(team.rosterSubmittedAt).toLocaleString()}</p> : null}
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Link href={`/teams/${team.id}`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                        <Eye size={16} aria-hidden="true" />
+                        View roster
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const opened = printRosterPreview({ team, tournamentName, players: roster, clubAdminEmail });
+                          setMessage(opened ? `Opened printable roster preview for ${team.name}.` : "Allow pop-ups to open the printable roster preview.");
+                        }}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        <Printer size={16} aria-hidden="true" />
+                        Print preview
+                      </button>
+                    </div>
                   </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">Players</p>
+                      <p className="mt-1 text-lg font-black text-slate-900">{roster.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">Submitted</p>
+                      <p className="mt-1 text-sm font-black text-slate-900">{team.rosterSubmittedAt ? new Date(team.rosterSubmittedAt).toLocaleString() : "-"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 sm:col-span-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">Club admin</p>
+                      <p className="mt-1 break-all text-sm font-black text-slate-900">{clubAdminEmail ?? "Not assigned"}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => void approveRoster(team)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white hover:bg-emerald-700">
-                      <CheckCircle2 size={16} aria-hidden="true" />
-                      Approve
-                    </button>
-                    <button type="button" onClick={() => void toggleRosterLock(team)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
-                      {team.rosterLocked ? <Unlock size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
-                      {team.rosterLocked ? "Unlock" : "Lock"}
+                        <CheckCircle2 size={16} aria-hidden="true" />
+                        Approve roster
+                      </button>
+                      <button type="button" onClick={() => void toggleRosterLock(team)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                        {team.rosterLocked ? <Unlock size={16} aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
+                        {team.rosterLocked ? "Unlock roster" : "Lock roster"}
+                      </button>
+                  </div>
+                  {team.rosterNote ? (
+                    <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                      <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+                      <span>{team.rosterNote}</span>
+                    </div>
+                  ) : null}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <label>
+                      <span className={labelClass()}>Admin note for change request</span>
+                      <textarea
+                        value={reviewNote}
+                        onChange={(event) => setRosterReviewNotes((current) => ({ ...current, [team.id]: event.target.value }))}
+                        placeholder="Explain exactly what the club admin should update before resubmitting."
+                        className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <button type="button" onClick={() => void requestRosterChanges(team)} className="inline-flex min-h-11 items-center justify-center self-end rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800 hover:bg-amber-100">
+                      Request changes
                     </button>
                   </div>
-                </div>
-                {team.rosterNote ? (
-                  <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-                    <AlertCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-                    <span>{team.rosterNote}</span>
-                  </div>
-                ) : null}
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <textarea
-                    value={reviewNote}
-                    onChange={(event) => setRosterReviewNotes((current) => ({ ...current, [team.id]: event.target.value }))}
-                    placeholder="Change request note for club admin"
-                    className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  />
-                  <button type="button" onClick={() => void requestRosterChanges(team)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-black text-amber-800 hover:bg-amber-100">
-                    Request changes
-                  </button>
-                </div>
-                <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                  <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
                   <div className="max-h-72 overflow-y-auto">
                     <table className="min-w-full divide-y divide-slate-100 text-sm">
                       <thead className="sticky top-0 bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
@@ -2072,6 +2226,7 @@ export function AdminScoreForm() {
                         ) : null}
                       </tbody>
                     </table>
+                  </div>
                   </div>
                 </div>
               </article>
@@ -2289,6 +2444,14 @@ export function AdminScoreForm() {
                           >
                             <Lock size={15} aria-hidden="true" />
                             {assignedClubAdmin ? "Already assigned" : "Assign Club Admin"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void sendClubAdminInvite(application, tournamentName, assignedTeam?.name ?? application.club)}
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
+                          >
+                            <Mail size={15} aria-hidden="true" />
+                            Send Club Admin Invite
                           </button>
                           <div className="grid grid-cols-2 gap-2">
                             <button

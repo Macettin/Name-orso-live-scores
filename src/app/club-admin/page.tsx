@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Lock, LogOut, Pencil, Plus, Save, Send, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, LogOut, Pencil, Plus, Printer, Save, Send, Trash2, X } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold } from "@/lib/disciplinary";
@@ -266,6 +266,68 @@ function PlayerAvatar({ player }: { player: Player }) {
   return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-black text-blue-700 ring-1 ring-blue-100">{initials(player.name)}</span>;
 }
 
+function printClubRosterPreview(team: Team, tournamentName: string, players: Player[]) {
+  const escapeMarkup = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  const rows = players.length
+    ? players
+        .slice()
+        .sort((first, second) => first.number - second.number || first.name.localeCompare(second.name))
+        .map(
+          (player) => `
+            <tr>
+              <td>${player.number}</td>
+              <td>${escapeMarkup(player.name)}</td>
+              <td>${escapeMarkup(player.position || "-")}</td>
+              <td>${player.photoUrl ? "Uploaded" : "-"}</td>
+            </tr>
+          `
+        )
+        .join("")
+    : `<tr><td colspan="4">No players listed.</td></tr>`;
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=720");
+  if (!printWindow) return false;
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeMarkup(team.name)} roster</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f172a; margin: 32px; }
+          header { border-bottom: 2px solid #dbeafe; padding-bottom: 18px; margin-bottom: 22px; }
+          h1 { margin: 0 0 8px; font-size: 28px; }
+          p { margin: 4px 0; color: #475569; font-weight: 700; }
+          table { border-collapse: collapse; width: 100%; margin-top: 18px; font-size: 14px; }
+          th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
+          th { background: #eff6ff; color: #1d4ed8; text-transform: uppercase; font-size: 11px; letter-spacing: .12em; }
+          @media print { body { margin: 18mm; } }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>${escapeMarkup(team.name)} roster</h1>
+          <p>${escapeMarkup(tournamentName)}</p>
+          <p>Status: ${escapeMarkup(team.rosterStatus ?? "Draft")}${team.rosterLocked ? " / Locked" : ""}</p>
+        </header>
+        ${team.rosterNote ? `<p><strong>Admin note:</strong> ${escapeMarkup(team.rosterNote)}</p>` : ""}
+        <table>
+          <thead><tr><th>#</th><th>Player</th><th>Position</th><th>Photo</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <script>window.addEventListener("load", () => window.print());</script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  return true;
+}
+
 export default function ClubAdminPage() {
   const router = useRouter();
   const {
@@ -315,6 +377,8 @@ export default function ClubAdminPage() {
   const rosterImportReadyRows = rosterPreviewRows.filter((row) => row.status === "ready");
   const rosterStatus = selectedTeam?.rosterStatus ?? "Draft";
   const rosterLocked = selectedTeam?.rosterLocked ?? false;
+  const selectedTournament = selectedTeam ? data.tournaments.find((tournament) => tournament.id === selectedTeam.tournamentId) : undefined;
+  const selectedTournamentName = selectedTournament?.name ?? "Tournament";
 
   useEffect(() => {
     if (!supabaseEnabled || authLoading) {
@@ -605,26 +669,56 @@ export default function ClubAdminPage() {
                     <h2 className="text-lg font-black">Roster status: {rosterStatus}</h2>
                     {rosterLocked ? <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-black uppercase">Locked</span> : null}
                   </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(["Draft", "Submitted", "Approved", "Needs changes"] as const).map((status) => (
+                      <span key={status} className={`rounded-full px-3 py-1 text-xs font-black uppercase ring-1 ${rosterStatus === status ? "bg-white text-slate-950 ring-white" : "bg-white/40 text-current ring-white/50"}`}>
+                        {status}
+                      </span>
+                    ))}
+                    <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ring-1 ${rosterLocked ? "bg-white text-slate-950 ring-white" : "bg-white/40 text-current ring-white/50"}`}>
+                      {rosterLocked ? "Roster locked" : "Roster unlocked"}
+                    </span>
+                  </div>
                   <p className="mt-2 max-w-3xl text-sm font-semibold">
                     {rosterStatus === "Approved"
-                      ? "This roster is approved for public use."
+                      ? rosterLocked
+                        ? "This roster is approved and locked. Ask the main admin to unlock it before editing players."
+                        : "This roster is approved for public use. It is currently unlocked, so edits are allowed."
                       : rosterStatus === "Submitted"
                         ? "Your roster is waiting for main admin review."
                         : rosterStatus === "Needs changes"
                           ? "Update the requested items, then submit again."
                           : "Complete the team profile and roster, then submit for approval."}
                   </p>
-                  {selectedTeam.rosterNote ? <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm font-bold">{selectedTeam.rosterNote}</p> : null}
+                  {selectedTeam.rosterNote ? (
+                    <div className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm font-bold">
+                      <span className="block text-xs uppercase tracking-wide opacity-70">Admin note</span>
+                      <p className="mt-1">{selectedTeam.rosterNote}</p>
+                    </div>
+                  ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void submitRosterForApproval()}
-                  disabled={rosterLocked || rosterStatus === "Submitted"}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  <Send size={16} aria-hidden="true" />
-                  Submit roster
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const opened = printClubRosterPreview(selectedTeam, selectedTournamentName, roster);
+                      setMessage(opened ? `Opened printable roster preview for ${selectedTeam.name}.` : "Allow pop-ups to open the printable roster preview.");
+                    }}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/60 bg-white/70 px-4 py-2 text-sm font-black text-slate-800 hover:bg-white"
+                  >
+                    <Printer size={16} aria-hidden="true" />
+                    Print preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitRosterForApproval()}
+                    disabled={rosterLocked || rosterStatus === "Submitted"}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    <Send size={16} aria-hidden="true" />
+                    Submit roster
+                  </button>
+                </div>
               </div>
             </section>
 
