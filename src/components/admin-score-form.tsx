@@ -1501,15 +1501,23 @@ export function AdminScoreForm() {
     }
   }
 
-  async function inviteClubAdminFromApplication(application: TournamentApplication) {
+  async function assignClubAdminFromApplication(application: TournamentApplication) {
     if (!application.teamId) {
-      setMessage("Create a team from this application before inviting a club admin.");
+      setMessage("Create a team from this application before assigning a club admin.");
       return;
     }
 
     const email = application.email.trim();
     if (!email) {
-      setMessage("Application email is required before inviting a club admin.");
+      setMessage("Application email is required before assigning a club admin.");
+      return;
+    }
+
+    const alreadyAssigned = clubAdminAssignments.some(
+      (assignment) => assignment.teamId === application.teamId && assignment.email?.toLowerCase() === email.toLowerCase()
+    );
+    if (alreadyAssigned) {
+      setMessage("Already assigned");
       return;
     }
 
@@ -1520,7 +1528,7 @@ export function AdminScoreForm() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Could not assign club admin.";
       if (errorMessage.toLowerCase().includes("no profile found")) {
-        setMessage(`No Supabase Auth user/profile found for ${email}. Create the user in Supabase Auth, then click Invite Club Admin again. Use the prepared login email from this card for instructions.`);
+        setMessage("User account must be created first in Supabase Auth. Use Copy invite to send login instructions, then assign the club admin after the account exists.");
         return;
       }
       setMessage(errorMessage);
@@ -2145,7 +2153,7 @@ export function AdminScoreForm() {
               const assignedClubAdmin = assignedTeam
                 ? clubAdminAssignments.find((assignment) => assignment.teamId === assignedTeam.id && assignment.email?.toLowerCase() === application.email.toLowerCase())
                 : undefined;
-              const canInviteClubAdmin = application.status === "accepted" && Boolean(application.teamId);
+              const canAssignClubAdmin = application.status === "accepted" && Boolean(application.teamId);
               const clubAdminInviteText = assignedTeam
                 ? clubAdminInviteMessage(application, tournamentName, assignedTeam.name, "/login")
                 : "";
@@ -2219,7 +2227,7 @@ export function AdminScoreForm() {
                         {assignedClubAdmin ? (
                           <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">Club admin: {assignedClubAdmin.email ?? "Assigned"}</span>
                         ) : application.teamId ? (
-                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">Club admin not invited</span>
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">Club admin not assigned</span>
                         ) : null}
                       </div>
                     </div>
@@ -2271,16 +2279,16 @@ export function AdminScoreForm() {
                         <Plus size={15} aria-hidden="true" />
                         {application.teamId ? "Team linked" : "Create Team"}
                       </button>
-                      {canInviteClubAdmin ? (
+                      {canAssignClubAdmin ? (
                         <>
                           <button
                             type="button"
-                            onClick={() => void inviteClubAdminFromApplication(application)}
+                            onClick={() => void assignClubAdminFromApplication(application)}
                             disabled={Boolean(assignedClubAdmin)}
                             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                           >
                             <Lock size={15} aria-hidden="true" />
-                            {assignedClubAdmin ? "Club Admin Invited" : "Invite Club Admin"}
+                            {assignedClubAdmin ? "Already assigned" : "Assign Club Admin"}
                           </button>
                           <div className="grid grid-cols-2 gap-2">
                             <button
