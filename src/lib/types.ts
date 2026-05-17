@@ -15,6 +15,8 @@ export const tournamentApplicationStatusOptions = ["new", "contacted", "waiting_
 export type TournamentApplicationStatus = (typeof tournamentApplicationStatusOptions)[number];
 export const newsCategoryOptions = ["News", "Announcement", "Result", "Media"] as const;
 export type NewsCategory = (typeof newsCategoryOptions)[number];
+export const mediaTypeOptions = ["photo", "video", "youtube"] as const;
+export type MediaType = (typeof mediaTypeOptions)[number];
 export type MatchEventType = "goal" | "assist" | "yellow" | "red" | "substitution" | "own_goal" | "penalty_goal" | "missed_penalty";
 export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks", "aces", "digs", "yellow_cards", "red_cards"] as const;
 export type PlayerStatKey = (typeof playerStatKeys)[number];
@@ -106,6 +108,20 @@ export type NewsPost = {
   imageUrl: string;
   category: NewsCategory;
   tournamentId?: string;
+  publishedAt: string;
+  isPublished: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type MediaItem = {
+  id: string;
+  tournamentId?: string;
+  title: string;
+  type: MediaType;
+  imageUrl?: string;
+  videoUrl?: string;
+  caption?: string;
   publishedAt: string;
   isPublished: boolean;
   createdAt?: string;

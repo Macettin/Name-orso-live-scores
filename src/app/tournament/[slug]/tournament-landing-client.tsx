@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ExternalLink, GitBranch, MapPin, PlayCircle, Radio, Shield, Star, Trophy, Users } from "lucide-react";
 import { LiveUpdateIndicator } from "@/components/live-update-indicator";
+import { MediaGrid } from "@/components/media-gallery";
 import { NewsCard } from "@/components/news-card";
 import { TeamLogo } from "@/components/ui";
 import { YouTubeEmbed } from "@/components/youtube-embed";
@@ -232,6 +233,10 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
     .filter((post) => post.isPublished && post.tournamentId === tournament.id)
     .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
     .slice(0, 3);
+  const tournamentMedia = data.mediaItems
+    .filter((item) => item.isPublished && item.tournamentId === tournament.id)
+    .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+    .slice(0, 6);
   const streamMatch = matches.find((match) => match.youtubeUrl);
   const standings = buildStandings({ ...data, teams, matches }).filter((standing) => teamIds.has(standing.teamId)).sort((first, second) => second.tournamentPoints - first.tournamentPoints).slice(0, 5);
   const scorers = topScorers(players);
@@ -315,6 +320,10 @@ export default function TournamentLandingClient({ slug }: { slug: string }) {
           </div>
         </SectionShell>
       ) : null}
+
+      <SectionShell eyebrow="Gallery" title="Tournament media gallery">
+        <MediaGrid items={tournamentMedia} emptyText="Tournament media will appear here after publishing." />
+      </SectionShell>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
         <SectionShell eyebrow="Live now" title="Latest live matches">

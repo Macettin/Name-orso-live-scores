@@ -14,6 +14,7 @@ import {
   matchTeamStatKeys,
   matchTeamStatLabels,
   matchPhaseOptions,
+  mediaTypeOptions,
   newsCategoryOptions,
   officialRoleOptions,
   sportOptions,
@@ -27,6 +28,8 @@ import {
   type MatchEventType,
   type MatchPhase,
   type MatchStatus,
+  type MediaItem,
+  type MediaType,
   type NewsCategory,
   type NewsPost,
   type Official,
@@ -70,6 +73,12 @@ type MatchForm = Pick<
 type TournamentForm = Pick<Tournament, "id" | "name" | "sportType" | "location" | "startDate" | "endDate" | "status" | "logoUrl" | "primaryColor" | "sponsorName" | "sponsorLogoUrl">;
 type NewsPostForm = Pick<NewsPost, "id" | "title" | "summary" | "content" | "imageUrl" | "category" | "publishedAt" | "isPublished"> & {
   tournamentId: string;
+};
+type MediaItemForm = Pick<MediaItem, "id" | "title" | "type" | "publishedAt" | "isPublished"> & {
+  tournamentId: string;
+  imageUrl: string;
+  videoUrl: string;
+  caption: string;
 };
 type EventForm = Pick<MatchEvent, "matchId" | "teamId" | "playerId" | "type" | "minute" | "description">;
 type SubstitutionForm = {
@@ -165,6 +174,18 @@ const emptyNewsPost: NewsPostForm = {
   isPublished: true
 };
 
+const emptyMediaItem: MediaItemForm = {
+  id: "",
+  tournamentId: "",
+  title: "",
+  type: "photo",
+  imageUrl: "",
+  videoUrl: "",
+  caption: "",
+  publishedAt: new Date().toISOString().slice(0, 16),
+  isPublished: true
+};
+
 const emptyEvent: EventForm = {
   matchId: "",
   teamId: "",
@@ -206,6 +227,7 @@ type AdminSection =
   | "fixture_builder"
   | "club_admins"
   | "news"
+  | "media_gallery"
   | "reports";
 
 const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminOnly?: boolean }[] = [
@@ -226,6 +248,7 @@ const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminO
   { id: "fixture_builder", label: "Fixture Builder", adminOnly: true },
   { id: "club_admins", label: "Club Admins", adminOnly: true },
   { id: "news", label: "News / Announcements", adminOnly: true },
+  { id: "media_gallery", label: "Media Gallery", adminOnly: true },
   { id: "reports", label: "Reports", adminOnly: true }
 ];
 
@@ -258,7 +281,7 @@ const adminSectionGroups: {
   {
     title: "Reports & Media",
     description: "News publishing, printable outputs, QR sharing, and match sheets.",
-    sections: ["news", "reports"],
+    sections: ["news", "media_gallery", "reports"],
     links: [{ label: "QR Print", href: "/qr-print" }]
   }
 ];
@@ -651,6 +674,8 @@ export function AdminScoreForm() {
     removeTournamentApplication,
     saveNewsPost,
     removeNewsPost,
+    saveMediaItem,
+    removeMediaItem,
     assignClubAdmin,
     removeClubAdminAssignment,
     clubAdminAssignments
@@ -669,6 +694,7 @@ export function AdminScoreForm() {
     awayTeamId: data.teams[1]?.id ?? data.teams[0]?.id ?? ""
   }));
   const [newsPostForm, setNewsPostForm] = useState<NewsPostForm>(() => ({ ...emptyNewsPost }));
+  const [mediaItemForm, setMediaItemForm] = useState<MediaItemForm>(() => ({ ...emptyMediaItem }));
   const [selectedScoreMatchId, setSelectedScoreMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedPlayerStatMatchId, setSelectedPlayerStatMatchId] = useState(() => data.matches[0]?.id ?? "");
   const [selectedTeamStatsMatchId, setSelectedTeamStatsMatchId] = useState(() => data.matches[0]?.id ?? "");
@@ -972,6 +998,67 @@ export function AdminScoreForm() {
       setNewsPostForm({ ...emptyNewsPost, publishedAt: new Date().toISOString().slice(0, 16) });
     }
     setMessage(`Deleted news post: ${post.title}`);
+  }
+
+  function submitMediaItem(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const imageUrl = mediaItemForm.imageUrl.trim();
+    const videoUrl = mediaItemForm.videoUrl.trim();
+
+    if (!mediaItemForm.title.trim()) {
+      setMessage("Media title is required.");
+      return;
+    }
+
+    if (mediaItemForm.type === "photo" && !imageUrl) {
+      setMessage("Photo media items need an image URL.");
+      return;
+    }
+
+    if (mediaItemForm.type !== "photo" && !videoUrl) {
+      setMessage("Video and YouTube media items need a video URL.");
+      return;
+    }
+
+    const item: MediaItem = {
+      id: mediaItemForm.id || createId("media", mediaItemForm.title),
+      tournamentId: mediaItemForm.tournamentId || undefined,
+      title: mediaItemForm.title.trim(),
+      type: mediaItemForm.type,
+      imageUrl: imageUrl || undefined,
+      videoUrl: videoUrl || undefined,
+      caption: mediaItemForm.caption.trim() || undefined,
+      publishedAt: new Date(mediaItemForm.publishedAt || Date.now()).toISOString(),
+      isPublished: mediaItemForm.isPublished
+    };
+
+    saveMediaItem(item);
+    setMediaItemForm({ ...emptyMediaItem, publishedAt: new Date().toISOString().slice(0, 16) });
+    setMessage(`Saved media item: ${item.title}`);
+  }
+
+  function editMediaItem(item: MediaItem) {
+    setMediaItemForm({
+      id: item.id,
+      tournamentId: item.tournamentId ?? "",
+      title: item.title,
+      type: item.type,
+      imageUrl: item.imageUrl ?? "",
+      videoUrl: item.videoUrl ?? "",
+      caption: item.caption ?? "",
+      publishedAt: item.publishedAt.slice(0, 16),
+      isPublished: item.isPublished
+    });
+    setActiveAdminSection("media_gallery");
+  }
+
+  function deleteMediaItemFromAdmin(item: MediaItem) {
+    removeMediaItem(item.id);
+    if (mediaItemForm.id === item.id) {
+      setMediaItemForm({ ...emptyMediaItem, publishedAt: new Date().toISOString().slice(0, 16) });
+    }
+    setMessage(`Deleted media item: ${item.title}`);
   }
 
   function submitTournament(event: React.FormEvent<HTMLFormElement>) {
@@ -2075,6 +2162,114 @@ export function AdminScoreForm() {
           {data.newsPosts.length === 0 ? (
             <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-2 xl:col-span-3">
               No news posts yet.
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className={adminPanelClass("media_gallery")}>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          {sectionTitle("Media Gallery", "Publish tournament photo, video, and YouTube gallery items for public pages.")}
+          {mediaItemForm.id ? (
+            <button onClick={() => setMediaItemForm({ ...emptyMediaItem, publishedAt: new Date().toISOString().slice(0, 16) })} className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+              <X size={16} aria-hidden="true" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+        <form onSubmit={submitMediaItem} className="grid gap-4 md:grid-cols-4">
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Title</span>
+            <input value={mediaItemForm.title} onChange={(event) => setMediaItemForm({ ...mediaItemForm, title: event.target.value })} className={inputClass()} />
+          </label>
+          <label>
+            <span className={labelClass()}>Type</span>
+            <select value={mediaItemForm.type} onChange={(event) => setMediaItemForm({ ...mediaItemForm, type: event.target.value as MediaType })} className={inputClass()}>
+              {mediaTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={labelClass()}>Tournament</span>
+            <select value={mediaItemForm.tournamentId} onChange={(event) => setMediaItemForm({ ...mediaItemForm, tournamentId: event.target.value })} className={inputClass()}>
+              <option value="">General gallery</option>
+              {data.tournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Image URL</span>
+            <input value={mediaItemForm.imageUrl} onChange={(event) => setMediaItemForm({ ...mediaItemForm, imageUrl: event.target.value })} className={inputClass()} placeholder="Required for photo, optional thumbnail for video" />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Video / YouTube URL</span>
+            <input value={mediaItemForm.videoUrl} onChange={(event) => setMediaItemForm({ ...mediaItemForm, videoUrl: event.target.value })} className={inputClass()} placeholder="Required for video and youtube" />
+          </label>
+          <label className="md:col-span-2">
+            <span className={labelClass()}>Caption</span>
+            <textarea value={mediaItemForm.caption} onChange={(event) => setMediaItemForm({ ...mediaItemForm, caption: event.target.value })} className={inputClass()} rows={3} />
+          </label>
+          <label>
+            <span className={labelClass()}>Published at</span>
+            <input type="datetime-local" value={mediaItemForm.publishedAt} onChange={(event) => setMediaItemForm({ ...mediaItemForm, publishedAt: event.target.value })} className={inputClass()} />
+          </label>
+          <label className="flex items-end gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+            <input type="checkbox" checked={mediaItemForm.isPublished} onChange={(event) => setMediaItemForm({ ...mediaItemForm, isPublished: event.target.checked })} className="h-5 w-5 rounded border-blue-300 text-blue-600" />
+            <span className="text-sm font-black text-blue-800">Published</span>
+          </label>
+          <div className="flex items-end md:col-span-4">
+            <button className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              {mediaItemForm.id ? <Save size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
+              {mediaItemForm.id ? "Save media" : "Create media"}
+            </button>
+          </div>
+        </form>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.mediaItems.map((item) => {
+            const itemTournament = item.tournamentId ? data.tournaments.find((tournament) => tournament.id === item.tournamentId) : undefined;
+            const previewUrl = item.imageUrl || item.videoUrl || "";
+            return (
+              <div key={item.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="aspect-[16/9] bg-blue-50 bg-cover bg-center" style={{ backgroundImage: previewUrl ? `url(${previewUrl})` : undefined }} />
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-blue-700">{item.type}</span>
+                    <span className={clsx("rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide", item.isPublished ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                      {item.isPublished ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <p className="mt-3 break-words text-base font-black text-slate-950">{item.title}</p>
+                  {item.caption ? <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{item.caption}</p> : null}
+                  <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-400">
+                    {new Date(item.publishedAt).toLocaleString()} {itemTournament ? `/ ${itemTournament.name}` : "/ General"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href="/gallery" className="flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-semibold text-blue-700">
+                      <Eye size={14} aria-hidden="true" />
+                      Gallery
+                    </Link>
+                    <button type="button" onClick={() => editMediaItem(item)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
+                      <Pencil size={14} aria-hidden="true" />
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => deleteMediaItemFromAdmin(item)} className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700">
+                      <Trash2 size={14} aria-hidden="true" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {data.mediaItems.length === 0 ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700 md:col-span-2 xl:col-span-3">
+              No media items yet.
             </p>
           ) : null}
         </div>

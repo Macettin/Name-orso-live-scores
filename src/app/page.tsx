@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Activity, CalendarDays, FileText, ShieldCheck } from "lucide-react";
+import { MediaGrid } from "@/components/media-gallery";
 import { MatchCard } from "@/components/match-card";
 import { NewsCard } from "@/components/news-card";
 import { Card, TournamentCoverBanner } from "@/components/ui";
@@ -18,6 +19,10 @@ export default function Home() {
     .filter((post) => post.isPublished)
     .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
     .slice(0, 3);
+  const latestMedia = data.mediaItems
+    .filter((item) => item.isPublished)
+    .sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+    .slice(0, 6);
   const scoreboardMatch = liveMatches[0] ?? nextFixtures[0] ?? data.matches[0];
   const heroChips = [
     { label: "Live scores", href: "/live" },
@@ -177,6 +182,18 @@ export default function Home() {
             </p>
           ) : null}
         </div>
+      </section>
+      <section className="mt-8 rounded-lg border border-blue-100 bg-white p-4 shadow-[0_16px_42px_rgba(37,99,235,0.08)] sm:p-5">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Gallery</p>
+            <h2 className="mt-1 text-xl font-black text-slate-900">Latest tournament media</h2>
+          </div>
+          <Link href="/gallery" className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
+            Open gallery
+          </Link>
+        </div>
+        <MediaGrid items={latestMedia} emptyText="Published tournament media will appear here." />
       </section>
       <section className="mt-8 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-4">

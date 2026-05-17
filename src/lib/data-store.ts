@@ -1,5 +1,5 @@
 import { matchTeamStatKeys } from "./types";
-import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, NewsPost, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
+import type { Match, MatchEvent, MatchLineupEntry, MatchOfficialAssignment, MatchStatus, MatchTeamStats, MediaItem, NewsPost, Official, Player, PlayerMatchStat, PlayerStatKey, Standing, Team, Tournament, TournamentApplication } from "./types";
 
 export type TournamentData = {
   tournaments: Tournament[];
@@ -14,6 +14,7 @@ export type TournamentData = {
   matchOfficials: MatchOfficialAssignment[];
   tournamentApplications: TournamentApplication[];
   newsPosts: NewsPost[];
+  mediaItems: MediaItem[];
 };
 
 export function slugify(value: string) {
@@ -81,7 +82,8 @@ export function deleteTeam(data: TournamentData, teamId: string): TournamentData
     officials: data.officials,
     matchOfficials: data.matchOfficials.filter((assignment) => !removedMatchIds.has(assignment.matchId)),
     tournamentApplications: data.tournamentApplications,
-    newsPosts: data.newsPosts
+    newsPosts: data.newsPosts,
+    mediaItems: data.mediaItems
   };
 }
 
@@ -222,7 +224,8 @@ export function deleteTournament(data: TournamentData, tournamentId: string): To
     officials: data.officials.filter((official) => official.tournamentId !== tournamentId),
     matchOfficials: data.matchOfficials.filter((assignment) => assignment.tournamentId !== tournamentId),
     tournamentApplications: data.tournamentApplications.filter((application) => application.tournamentId !== tournamentId),
-    newsPosts: data.newsPosts.map((post) => (post.tournamentId === tournamentId ? { ...post, tournamentId: undefined } : post))
+    newsPosts: data.newsPosts.map((post) => (post.tournamentId === tournamentId ? { ...post, tournamentId: undefined } : post)),
+    mediaItems: data.mediaItems.map((item) => (item.tournamentId === tournamentId ? { ...item, tournamentId: undefined } : item))
   };
 }
 
@@ -256,6 +259,22 @@ export function deleteNewsPost(data: TournamentData, postId: string): Tournament
   return {
     ...data,
     newsPosts: data.newsPosts.filter((post) => post.id !== postId)
+  };
+}
+
+export function upsertMediaItem(data: TournamentData, item: MediaItem): TournamentData {
+  const exists = data.mediaItems.some((mediaItem) => mediaItem.id === item.id);
+  const mediaItems = exists ? data.mediaItems.map((mediaItem) => (mediaItem.id === item.id ? item : mediaItem)) : [...data.mediaItems, item];
+  return {
+    ...data,
+    mediaItems: [...mediaItems].sort((first, second) => new Date(second.publishedAt).getTime() - new Date(first.publishedAt).getTime())
+  };
+}
+
+export function deleteMediaItem(data: TournamentData, itemId: string): TournamentData {
+  return {
+    ...data,
+    mediaItems: data.mediaItems.filter((item) => item.id !== itemId)
   };
 }
 
