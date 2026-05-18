@@ -3812,9 +3812,14 @@ export function AdminScoreForm() {
       <section className={adminPanelClass("reports")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           {sectionTitle("Reports", "Open printable match reports and public QR destinations for sharing.")}
-          <Link href="/qr-print" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
-            Printable QR page
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/reports/accreditation" className="rounded-lg border border-blue-200 bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700">
+              Accreditation cards
+            </Link>
+            <Link href="/qr-print" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-100">
+              Printable QR page
+            </Link>
+          </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-lg border border-slate-200 p-4">
