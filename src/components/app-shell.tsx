@@ -131,7 +131,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Orso Sports Events
               </a>
             </p>
-            <p className="text-xs font-semibold text-slate-400">Your digital sports event platform.</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-400 lg:justify-end">
+              <Link href="/help" className="font-black text-blue-700 transition hover:text-blue-800">
+                Help
+              </Link>
+              <p>Your digital sports event platform.</p>
+            </div>
           </div>
         </footer>
       ) : null}
