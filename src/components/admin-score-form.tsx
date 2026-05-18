@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, Bell, CheckCircle2, Copy, Eye, ImageUp, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
-import { createId, getMatchTeamStats, type TournamentData } from "@/lib/data-store";
+import { AlertCircle, Bell, CheckCircle2, Copy, Eye, Gauge, ImageUp, ListChecks, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { createId, getMatchTeamStats, slugify, type TournamentData } from "@/lib/data-store";
 import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
@@ -242,6 +242,7 @@ const periodOptionsBySport: Record<Sport, string[]> = {
 
 type AdminSection =
   | "overview"
+  | "readiness"
   | "notifications"
   | "tournaments"
   | "teams"
@@ -266,6 +267,7 @@ type AdminSection =
 
 const adminSections: { id: AdminSection; label: string; scorer?: boolean; adminOnly?: boolean }[] = [
   { id: "overview", label: "Overview" },
+  { id: "readiness", label: "Readiness Checklist", adminOnly: true },
   { id: "notifications", label: "Notifications", adminOnly: true },
   { id: "tournaments", label: "Tournaments", adminOnly: true },
   { id: "teams", label: "Teams", adminOnly: true },
@@ -297,8 +299,8 @@ const adminSectionGroups: {
 }[] = [
   {
     title: "Overview",
-    description: "Dashboard summary and quick actions.",
-    sections: ["overview", "notifications"]
+    description: "Dashboard summary, readiness, and quick actions.",
+    sections: ["overview", "readiness", "notifications"]
   },
   {
     title: "Tournament Setup",
@@ -489,6 +491,134 @@ function teamName(data: TournamentData, teamId: string) {
 
 function matchLabel(data: TournamentData, match: Match) {
   return `${teamName(data, match.homeTeamId)} vs ${teamName(data, match.awayTeamId)}`;
+}
+
+type ReadinessStatus = "Ready" | "Missing" | "Warning";
+type ReadinessItem = {
+  label: string;
+  status: ReadinessStatus;
+  detail: string;
+  optional?: boolean;
+};
+
+function readinessStatusClass(status: ReadinessStatus) {
+  if (status === "Ready") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "Warning") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-red-200 bg-red-50 text-red-700";
+}
+
+function readinessScore(status: ReadinessStatus) {
+  if (status === "Ready") return 1;
+  if (status === "Warning") return 0.5;
+  return 0;
+}
+
+function selectedTournamentTeams(data: TournamentData, selectedTournamentId: string) {
+  return data.teams.filter((team) => !team.tournamentId || team.tournamentId === selectedTournamentId);
+}
+
+function selectedTournamentMatches(data: TournamentData, selectedTournamentId: string) {
+  const teamIds = new Set(selectedTournamentTeams(data, selectedTournamentId).map((team) => team.id));
+  return data.matches.filter(
+    (match) =>
+      !match.tournamentId ||
+      match.tournamentId === selectedTournamentId ||
+      teamIds.has(match.homeTeamId) ||
+      teamIds.has(match.awayTeamId)
+  );
+}
+
+function buildReadinessItems(data: TournamentData, selectedTournamentId: string, selectedTournament?: Tournament): ReadinessItem[] {
+  const teams = selectedTournamentTeams(data, selectedTournamentId);
+  const matches = selectedTournamentMatches(data, selectedTournamentId);
+  const tournamentDetailsComplete = Boolean(
+    selectedTournament?.name.trim() &&
+      selectedTournament.location.trim() &&
+      selectedTournament.startDate &&
+      selectedTournament.endDate &&
+      selectedTournament.sportType
+  );
+  const teamsWithLogo = teams.filter((team) => Boolean(team.logoUrl?.trim())).length;
+  const rostersSubmitted = teams.filter((team) => team.rosterStatus === "Submitted" || team.rosterStatus === "Approved" || Boolean(team.rosterSubmittedAt || team.rosterApprovedAt)).length;
+  const rostersApproved = teams.filter((team) => team.rosterStatus === "Approved").length;
+  const matchesWithOfficials = matches.filter((match) => data.matchOfficials.some((assignment) => assignment.matchId === match.id)).length;
+  const matchesWithQrData = matches.filter((match) => match.court.trim() && match.hallSlug.trim()).length;
+  const activeSponsorCount = data.sponsors.filter((sponsor) => sponsor.isActive && (!sponsor.tournamentId || sponsor.tournamentId === selectedTournamentId)).length;
+  const publishedMediaCount = data.mediaItems.filter((item) => item.isPublished && (!item.tournamentId || item.tournamentId === selectedTournamentId)).length;
+  const publishedNewsCount = data.newsPosts.filter((post) => post.isPublished && (!post.tournamentId || post.tournamentId === selectedTournamentId)).length;
+
+  return [
+    {
+      label: "Tournament details completed",
+      status: tournamentDetailsComplete ? "Ready" : "Missing",
+      detail: tournamentDetailsComplete ? "Name, sport, location, and dates are set." : "Complete tournament name, sport, location, start date, and end date."
+    },
+    {
+      label: "Tournament logo uploaded",
+      status: selectedTournament?.logoUrl?.trim() ? "Ready" : "Missing",
+      detail: selectedTournament?.logoUrl?.trim() ? "Tournament logo is available for public pages." : "Upload or paste a tournament logo URL."
+    },
+    {
+      label: "Teams added",
+      status: teams.length >= 2 ? "Ready" : teams.length === 1 ? "Warning" : "Missing",
+      detail: teams.length >= 2 ? `${teams.length} teams are linked to this tournament.` : teams.length === 1 ? "Only one team is linked; fixtures need at least two teams." : "Add teams before building fixtures."
+    },
+    {
+      label: "Team logos uploaded",
+      status: teams.length === 0 ? "Missing" : teamsWithLogo === teams.length ? "Ready" : teamsWithLogo > 0 ? "Warning" : "Missing",
+      detail: teams.length === 0 ? "Add teams before uploading logos." : `${teamsWithLogo} of ${teams.length} team logos are uploaded.`
+    },
+    {
+      label: "Rosters submitted",
+      status: teams.length === 0 ? "Missing" : rostersSubmitted === teams.length ? "Ready" : rostersSubmitted > 0 ? "Warning" : "Missing",
+      detail: teams.length === 0 ? "Add teams before roster submission." : `${rostersSubmitted} of ${teams.length} rosters are submitted or approved.`
+    },
+    {
+      label: "Rosters approved",
+      status: teams.length === 0 ? "Missing" : rostersApproved === teams.length ? "Ready" : rostersApproved > 0 ? "Warning" : "Missing",
+      detail: teams.length === 0 ? "Add teams before approving rosters." : `${rostersApproved} of ${teams.length} rosters are approved.`
+    },
+    {
+      label: "Fixtures created",
+      status: matches.length > 0 ? "Ready" : "Missing",
+      detail: matches.length > 0 ? `${matches.length} fixtures are available.` : "Create fixtures for the tournament schedule."
+    },
+    {
+      label: "Match officials assigned",
+      status: matches.length === 0 ? "Missing" : matchesWithOfficials === matches.length ? "Ready" : matchesWithOfficials > 0 ? "Warning" : "Missing",
+      detail: matches.length === 0 ? "Create fixtures before assigning officials." : `${matchesWithOfficials} of ${matches.length} matches have assigned officials.`
+    },
+    {
+      label: "QR codes ready",
+      status: matches.length === 0 ? "Missing" : matchesWithQrData === matches.length ? "Ready" : matchesWithQrData > 0 ? "Warning" : "Missing",
+      detail: matches.length === 0 ? "Create fixtures before printing court QR codes." : `${matchesWithQrData} of ${matches.length} fixtures include court and QR hall data.`
+    },
+    {
+      label: "Scorekeeper links available",
+      status: matches.length > 0 ? "Ready" : "Missing",
+      detail: matches.length > 0 ? "Scorekeeper and match console links are generated from match IDs." : "Create fixtures to generate scorekeeper links."
+    },
+    {
+      label: "Reports available",
+      status: matches.length > 0 && teams.length > 0 ? "Ready" : matches.length > 0 ? "Warning" : "Missing",
+      detail: matches.length > 0 && teams.length > 0 ? "Match reports and match sheets are available for created fixtures." : matches.length > 0 ? "Fixtures exist, but team setup is incomplete." : "Create fixtures before reports can be opened."
+    },
+    {
+      label: "Sponsor/media/news optional",
+      status: activeSponsorCount + publishedMediaCount + publishedNewsCount > 0 ? "Ready" : "Warning",
+      detail:
+        activeSponsorCount + publishedMediaCount + publishedNewsCount > 0
+          ? `${activeSponsorCount} sponsors, ${publishedMediaCount} media items, and ${publishedNewsCount} news posts are published or active.`
+          : "Optional content is not required for launch, but improves the public tournament page.",
+      optional: true
+    }
+  ];
 }
 
 function buildFixtureConflictNotifications(data: TournamentData, selectedTournamentId: string): AdminNotification[] {
@@ -924,6 +1054,20 @@ export function AdminScoreForm() {
   );
   const selectedTournament = data.tournaments.find((tournament) => tournament.id === selectedTournamentId);
   const selectedTournamentSport = selectedTournament?.sportType !== "Mixed" ? selectedTournament?.sportType : undefined;
+  const readinessItems = buildReadinessItems(data, selectedTournamentId, selectedTournament);
+  const requiredReadinessItems = readinessItems.filter((item) => !item.optional);
+  const readinessPercentage = requiredReadinessItems.length
+    ? Math.round((requiredReadinessItems.reduce((total, item) => total + readinessScore(item.status), 0) / requiredReadinessItems.length) * 100)
+    : 0;
+  const readinessCounts = readinessItems.reduce(
+    (counts, item) => ({ ...counts, [item.status]: counts[item.status] + 1 }),
+    { Ready: 0, Missing: 0, Warning: 0 } as Record<ReadinessStatus, number>
+  );
+  const readinessMatches = selectedTournamentMatches(data, selectedTournamentId);
+  const firstReadinessMatch = readinessMatches[0];
+  const selectedTournamentSlug = selectedTournament ? slugify(selectedTournament.name) || selectedTournament.id : "";
+  const selectedTournamentPublicPath = selectedTournamentSlug ? `/tournaments/${selectedTournamentSlug}` : "";
+  const selectedTournamentQrPath = selectedTournamentSlug ? `/tournaments/${selectedTournamentSlug}/qr` : "";
   const filteredApplications = data.tournamentApplications.filter(
     (application) =>
       (applicationTournamentFilter === "all" || application.tournamentId === applicationTournamentFilter) &&
@@ -1042,6 +1186,17 @@ export function AdminScoreForm() {
   async function markAllNotificationsRead() {
     await Promise.all(unreadNotifications.map((notification) => markAdminNotificationRead(notification.key)));
     setMessage(`Marked ${unreadNotifications.length} notification${unreadNotifications.length === 1 ? "" : "s"} as read.`);
+  }
+
+  async function copyPublicTournamentLink() {
+    if (!selectedTournamentPublicPath || typeof window === "undefined") {
+      setMessage("Select a tournament before copying the public link.");
+      return;
+    }
+
+    const publicUrl = new URL(selectedTournamentPublicPath, window.location.origin).toString();
+    await navigator.clipboard.writeText(publicUrl);
+    setMessage(`Copied public tournament link: ${publicUrl}`);
   }
 
   useEffect(() => {
@@ -2258,6 +2413,138 @@ export function AdminScoreForm() {
                 <p className="mt-1 text-3xl font-black text-blue-950">{value}</p>
               </div>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {canManageAll ? (
+        <section className={adminPanelClass("readiness")}>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                  <ListChecks size={22} aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">System Health</p>
+                  <h2 className="mt-1 break-words text-xl font-black tracking-tight text-slate-950">Readiness Checklist</h2>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
+                    Confirm the selected tournament is ready before going live. Optional sponsor, media, and news content is shown as guidance and is not counted against launch readiness.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 xl:min-w-72">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-blue-700">Overall readiness</p>
+                  <p className="mt-1 text-4xl font-black text-blue-950">{readinessPercentage}%</p>
+                </div>
+                <Gauge size={44} className="shrink-0 text-blue-600" aria-hidden="true" />
+              </div>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-white ring-1 ring-blue-100">
+                <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${readinessPercentage}%` }} />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                {(["Ready", "Warning", "Missing"] as const).map((status) => (
+                  <div key={status} className={clsx("rounded-lg border px-2 py-2", readinessStatusClass(status))}>
+                    <p className="text-lg font-black">{readinessCounts[status]}</p>
+                    <p className="text-[0.65rem] font-black uppercase tracking-wide">{status}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Tournament sharing</p>
+                <h3 className="mt-1 break-words text-lg font-black text-blue-950">{selectedTournament?.name ?? "Select a tournament"}</h3>
+                <p className="mt-1 break-all text-sm font-semibold text-blue-700">{selectedTournamentPublicPath || "Public tournament link will appear here."}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyPublicTournamentLink()}
+                  disabled={!selectedTournamentPublicPath}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Copy size={16} aria-hidden="true" />
+                  Copy public tournament link
+                </button>
+                {selectedTournamentPublicPath ? (
+                  <Link href={selectedTournamentPublicPath} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-50">
+                    <Eye size={16} aria-hidden="true" />
+                    Open public tournament page
+                  </Link>
+                ) : null}
+                {selectedTournamentQrPath ? (
+                  <Link href={selectedTournamentQrPath} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+                    <Printer size={16} aria-hidden="true" />
+                    Open QR print page
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {[
+              { label: "Go to Teams", section: "teams" as const },
+              { label: "Go to Fixtures", section: "matches" as const },
+              { label: "Go to Roster Approvals", section: "roster_approvals" as const }
+            ].map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => {
+                  setActiveAdminSection(action.section);
+                  window.location.hash = action.section;
+                }}
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+              >
+                {action.label}
+              </button>
+            ))}
+            <Link href="/qr-print" className="inline-flex min-h-10 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-100">
+              Go to QR Print
+            </Link>
+            {firstReadinessMatch ? (
+              <Link href={`/admin/match-console/${firstReadinessMatch.id}`} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+                Go to Match Console
+              </Link>
+            ) : (
+              <span className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-black text-slate-400">
+                Go to Match Console
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {readinessItems.map((item) => {
+              const Icon = item.status === "Ready" ? CheckCircle2 : item.status === "Warning" ? AlertCircle : X;
+
+              return (
+                <article key={item.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border", readinessStatusClass(item.status))}>
+                      <Icon size={20} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="break-words text-sm font-black text-slate-950">{item.label}</h3>
+                        {item.optional ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-wide text-slate-500">Optional</span> : null}
+                      </div>
+                      <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{item.detail}</p>
+                    </div>
+                    <span className={clsx("shrink-0 rounded-full border px-2.5 py-1 text-xs font-black uppercase tracking-wide", readinessStatusClass(item.status))}>
+                      {item.status}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}
