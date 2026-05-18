@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, ClipboardCheck, LifeBuoy, ShieldCheck, Trophy, Users } from "lucide-react";
+import { BookOpen, ClipboardCheck, Download, FileText, LifeBuoy, ShieldCheck, Trophy, Users } from "lucide-react";
 import { Card, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = {
@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 };
 
 const quickLinks = [
+  "Downloads",
   "What is Orso Sports Hub",
   "User roles",
   "Admin guide",
@@ -17,6 +18,19 @@ const quickLinks = [
   "Public user guide",
   "Tournament application guide",
   "Troubleshooting"
+];
+
+const downloads = [
+  {
+    title: "User Manual PDF",
+    description: "For admins, club admins, and organizers.",
+    href: "/docs/Orso_Sports_Hub_User_Manual.pdf"
+  },
+  {
+    title: "Scorekeeper Quick Guide PDF",
+    description: "One-page match-day guide for scorers.",
+    href: "/docs/Orso_Sports_Hub_Scorekeeper_Quick_Guide.pdf"
+  }
 ];
 
 const sections = [
@@ -137,6 +151,45 @@ export default function HelpPage() {
             >
               {link}
             </Link>
+          ))}
+        </div>
+      </section>
+
+      <section id="downloads" className="scroll-mt-28 rounded-lg border border-slate-200 bg-white p-4 shadow-[0_14px_34px_rgba(15,23,42,0.07)] sm:p-5">
+        <div className="mb-4 flex min-w-0 items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+            <Download size={22} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Manuals</p>
+            <h2 className="mt-1 break-words text-xl font-black leading-tight text-slate-950">Downloads</h2>
+            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600">
+              Download official Orso Sports Hub manuals for event setup, club administration, and match-day scorekeeping.
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {downloads.map((download) => (
+            <a
+              key={download.href}
+              href={download.href}
+              download
+              className="group flex min-w-0 flex-col justify-between rounded-lg border border-blue-100 bg-blue-50/60 p-4 transition hover:border-blue-200 hover:bg-blue-50 hover:shadow-[0_12px_28px_rgba(37,99,235,0.12)]"
+            >
+              <span className="flex min-w-0 items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 ring-1 ring-blue-100">
+                  <FileText size={20} aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block break-words text-base font-black text-slate-950 group-hover:text-blue-700">{download.title}</span>
+                  <span className="mt-1 block text-sm font-medium leading-6 text-slate-600">{download.description}</span>
+                </span>
+              </span>
+              <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition group-hover:bg-blue-700">
+                Download PDF
+                <Download size={16} aria-hidden="true" />
+              </span>
+            </a>
           ))}
         </div>
       </section>

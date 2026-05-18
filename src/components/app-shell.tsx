@@ -133,7 +133,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </p>
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-400 lg:justify-end">
               <Link href="/help" className="font-black text-blue-700 transition hover:text-blue-800">
-                Help
+                Help / Manuals
               </Link>
               <p>Your digital sports event platform.</p>
             </div>
