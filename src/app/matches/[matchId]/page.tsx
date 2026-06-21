@@ -13,7 +13,7 @@ import { buildStandings, getMatchTeamStats, getTeam, type TournamentData } from 
 import { groupGoalEventsByScorer } from "@/lib/goal-scorers";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { formatMatchClock } from "@/lib/match-clock";
-import { matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Official, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
+import { isFootballLikeSport, matchTeamStatKeys, matchTeamStatLabels, playerStatLabels, playerStatsBySport, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchTeamStatKey, type Official, type Player, type PlayerMatchStat, type PlayerStatKey, type Team, type Tournament } from "@/lib/types";
 
 type MatchTab = "overview" | "timeline" | "lineups" | "analysis" | "stats" | "standings" | "report";
 
@@ -482,7 +482,7 @@ function topPlayerForCards(stats: PlayerMatchStat[], players: Player[]) {
 
 function TopPerformers({ data, match, players }: { data: TournamentData; match: Match; players: Player[] }) {
   const matchStats = data.playerMatchStats.filter((stat) => stat.matchId === match.id);
-  const scoringStat: PlayerStatKey = match.sport === "Football" ? "goals" : "points";
+  const scoringStat: PlayerStatKey = isFootballLikeSport(match.sport) ? "goals" : "points";
   const topScorer = topPlayerForStat(matchStats, players, scoringStat);
   const assistLeader = topPlayerForStat(matchStats, players, "assists");
   const cardsLeader = topPlayerForCards(matchStats, players);
@@ -1093,8 +1093,8 @@ function AnalysisTab({
   return (
     <Panel title="Analysis" eyebrow="Pitch map and key moments">
       <div className="grid gap-5">
-        {match.sport !== "Football" ? (
-          <SectionEmpty>Football pitch analysis is optimized for football matches.</SectionEmpty>
+        {!isFootballLikeSport(match.sport) ? (
+          <SectionEmpty>Pitch analysis is optimized for football and futsal matches.</SectionEmpty>
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-3">

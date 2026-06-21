@@ -9,10 +9,11 @@ import { YouTubeEmbed } from "@/components/youtube-embed";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 import { createId, getTeam } from "@/lib/data-store";
 import { formatMatchClock, getClockStateForAction } from "@/lib/match-clock";
-import type { Match, MatchEventType, Sport, Team } from "@/lib/types";
+import { isFootballLikeSport, type Match, type MatchEventType, type Sport, type Team } from "@/lib/types";
 
 const periodOptions: Record<Sport, string[]> = {
   Football: ["First Half", "Half Time", "Second Half", "Full Time"],
+  Futsal: ["First Half", "Half Time", "Second Half", "Full Time"],
   Basketball: ["Q1", "Q2", "Half Time", "Q3", "Q4", "Final"],
   Volleyball: ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5", "Final"]
 };
@@ -177,7 +178,7 @@ export default function ScorerMatchPage() {
 
   const activeMatch: Match = match;
   const clockLabel = formatMatchClock(activeMatch, now);
-  const showFootballEvents = activeMatch.sport === "Football";
+  const showFootballEvents = isFootballLikeSport(activeMatch.sport);
 
   function updateScore(homeDelta: number, awayDelta: number) {
     void saveScore(
@@ -323,7 +324,7 @@ export default function ScorerMatchPage() {
             <button
               type="button"
               onClick={() => updatePeriod("Second Half")}
-              disabled={match.sport !== "Football"}
+              disabled={!isFootballLikeSport(match.sport)}
               className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-black text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Square className="h-4 w-4" />

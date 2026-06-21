@@ -7,7 +7,7 @@ import { TeamStaffList } from "@/components/team-staff-list";
 import { getTeam } from "@/lib/data-store";
 import { disciplinaryRowForPlayer, disciplinaryRows } from "@/lib/disciplinary";
 import { useTournamentData } from "@/hooks/use-tournament-data";
-import type { MatchLineupRole, Official, Player, Team, Tournament } from "@/lib/types";
+import { isFootballLikeSport, type MatchLineupRole, type Official, type Player, type Team, type Tournament } from "@/lib/types";
 
 function initials(value: string) {
   return value.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "T";
@@ -61,6 +61,10 @@ function PlayerAvatar({ player }: { player: Player }) {
 
 function rolePlayers(players: Player[], roles: Map<string, MatchLineupRole>, role: MatchLineupRole) {
   return players.filter((player) => (roles.get(player.id) ?? "reserve") === role).sort((first, second) => first.number - second.number || first.name.localeCompare(second.name));
+}
+
+function startingLabel(sport?: string) {
+  return sport === "Futsal" ? "Starting 5" : isFootballLikeSport(sport) ? "Starting XI" : "Starters";
 }
 
 function PlayerTable({ title, players }: { title: string; players: Player[] }) {
@@ -203,11 +207,11 @@ export default function MatchSheetPage() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="grid gap-4">
-            <PlayerTable title={`${home?.name ?? "Home"} Starting XI`} players={rolePlayers(homePlayers, homeRoles, "starting")} />
+            <PlayerTable title={`${home?.name ?? "Home"} ${startingLabel(match.sport)}`} players={rolePlayers(homePlayers, homeRoles, "starting")} />
             <PlayerTable title={`${home?.name ?? "Home"} Substitutes`} players={rolePlayers(homePlayers, homeRoles, "substitute")} />
           </div>
           <div className="grid gap-4">
-            <PlayerTable title={`${away?.name ?? "Away"} Starting XI`} players={rolePlayers(awayPlayers, awayRoles, "starting")} />
+            <PlayerTable title={`${away?.name ?? "Away"} ${startingLabel(match.sport)}`} players={rolePlayers(awayPlayers, awayRoles, "starting")} />
             <PlayerTable title={`${away?.name ?? "Away"} Substitutes`} players={rolePlayers(awayPlayers, awayRoles, "substitute")} />
           </div>
         </section>

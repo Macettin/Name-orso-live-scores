@@ -8,7 +8,10 @@ import { createId, getMatchTeamStats, slugify, type TournamentData } from "@/lib
 import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
 import { formatMatchClock, getBasketballDefaultSeconds, getClockStateForAction, isFootballClockOverride } from "@/lib/match-clock";
+import { normalizeSpreadsheetValue, parseSpreadsheetRows } from "@/lib/spreadsheet-import";
 import {
+  isFootballLikeSport,
+  playerStatKeys,
   playerStatLabels,
   playerStatsBySport,
   matchTeamStatKeys,
@@ -98,6 +101,20 @@ type SubstitutionForm = {
   playerOutId: string;
   playerInId: string;
   minute: string;
+};
+type LineupImportRole = MatchLineupRole | "invalid";
+type LineupImportRow = {
+  numberText: string;
+  playerName: string;
+  position: string;
+  roleText: string;
+};
+type LineupPreviewRow = LineupImportRow & {
+  rowNumber: number;
+  role: LineupImportRole;
+  player?: Player;
+  status: "ready" | "warning" | "error";
+  message: string;
 };
 
 const emptyTournament: TournamentForm = {
@@ -236,6 +253,7 @@ const emptySubstitution: SubstitutionForm = {
 
 const periodOptionsBySport: Record<Sport, string[]> = {
   Football: ["First Half", "Half Time", "Second Half", "Full Time"],
+  Futsal: ["First Half", "Half Time", "Second Half", "Full Time"],
   Basketball: ["Q1", "Q2", "Half Time", "Q3", "Q4", "Final"],
   Volleyball: ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5", "Final"]
 };
@@ -326,9 +344,12 @@ const adminSectionGroups: {
 ];
 
 const adminDarkModeStorageKey = "orso-admin-dark-mode";
-const lineupFormations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3"] as const;
+const lineupFormations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3", "1-2-1", "2-1-1"] as const;
 type LineupFormation = (typeof lineupFormations)[number];
 type LineupPosition = { x: number; y: number };
+const footballLineupFormations: LineupFormation[] = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1", "3-4-3"];
+const futsalLineupFormations: LineupFormation[] = ["1-2-1", "2-1-1"];
+const lineupImportHeaders = ["Number", "Player Name", "Position", "Role"];
 
 function clampPercent(value: number) {
   return Math.max(7, Math.min(93, value));
@@ -347,27 +368,88 @@ function formationShape(formation: string) {
     "4-4-2": [1, 4, 4, 2],
     "3-5-2": [1, 3, 5, 2],
     "4-2-3-1": [1, 4, 2, 3, 1],
-    "3-4-3": [1, 3, 4, 3]
+    "3-4-3": [1, 3, 4, 3],
+    "1-2-1": [1, 1, 2, 1],
+    "2-1-1": [1, 2, 1, 1]
   };
   return known[formation] ?? known["4-3-3"];
 }
 
 function formationPositions(formation: string) {
   const shape = formationShape(formation);
-  const yByLine = shape.length === 5 ? [88, 70, 56, 38, 20] : [88, 68, 46, 22];
-  return shape.flatMap((count, index) => spreadLine(count, yByLine[index] ?? 50)).slice(0, 11);
+  const isFutsalShape = formation === "1-2-1" || formation === "2-1-1";
+  const yByLine = isFutsalShape ? [88, 64, 42, 20] : shape.length === 5 ? [88, 70, 56, 38, 20] : [88, 68, 46, 22];
+  return shape.flatMap((count, index) => spreadLine(count, yByLine[index] ?? 50));
 }
 
-function autoArrangePositions(players: Player[], roles: Record<string, MatchLineupRole>, formation: string, existing: Record<string, LineupPosition>) {
+function startingLimitForSport(sport?: Sport) {
+  return sport === "Futsal" ? 5 : 11;
+}
+
+function lineupLabelForSport(sport?: Sport) {
+  return sport === "Futsal" ? "Starting 5" : "Starting XI";
+}
+
+function lineupFormationOptions(sport?: Sport) {
+  return sport === "Futsal" ? futsalLineupFormations : footballLineupFormations;
+}
+
+function defaultLineupFormation(sport?: Sport): LineupFormation {
+  return sport === "Futsal" ? "1-2-1" : "4-3-3";
+}
+
+function autoArrangePositions(players: Player[], roles: Record<string, MatchLineupRole>, formation: string, existing: Record<string, LineupPosition>, sport?: Sport) {
   const starters = players.filter((player) => roles[player.id] === "starting");
   const preset = formationPositions(formation);
   const next = { ...existing };
 
-  starters.slice(0, 11).forEach((player, index) => {
+  starters.slice(0, startingLimitForSport(sport)).forEach((player, index) => {
     next[player.id] = preset[index] ?? { x: 50, y: 50 };
   });
 
   return next;
+}
+
+function parseLineupRole(value: string, sport?: Sport): LineupImportRole {
+  const normalized = normalizeSpreadsheetValue(value).replace(/[^a-z0-9]+/g, " ").trim();
+  if (normalized === "starter" || normalized === "starting xi" || normalized === "starting 11" || (sport === "Futsal" && normalized === "starting 5")) return "starting";
+  if (normalized === "substitute" || normalized === "sub") return "substitute";
+  if (normalized === "reserve" || normalized === "not in squad") return "reserve";
+  return "invalid";
+}
+
+function parseLineupRows(rows: string[][]): LineupImportRow[] {
+  const headers = rows[0]?.map((header) => normalizeSpreadsheetValue(header)) ?? [];
+  const indexFor = (label: string) => headers.indexOf(normalizeSpreadsheetValue(label));
+
+  return rows.slice(1).map((row) => ({
+    numberText: row[indexFor("Number")] ?? "",
+    playerName: row[indexFor("Player Name")] ?? "",
+    position: row[indexFor("Position")] ?? "",
+    roleText: row[indexFor("Role")] ?? ""
+  }));
+}
+
+function lineupTemplateHref(sport: "Football" | "Futsal") {
+  const sample =
+    sport === "Futsal"
+      ? [
+          lineupImportHeaders.join(","),
+          "1,Kerem Yilmaz,GK,Starting 5",
+          "4,Emre Aydin,Defender / Fix,Starting 5",
+          "7,Can Demir,Ala / Winger,Starting 5",
+          "10,Mert Kaya,Pivot,Starting 5",
+          "12,Ali Aslan,Ala / Winger,Substitute"
+        ].join("\n")
+      : [
+          lineupImportHeaders.join(","),
+          "1,Kerem Yilmaz,GK,Starting XI",
+          "4,Emre Aydin,Defender,Starting XI",
+          "7,Can Demir,Winger,Starting XI",
+          "10,Mert Kaya,Forward,Substitute"
+        ].join("\n");
+
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(sample)}`;
 }
 
 function roleRank(role: MatchLineupRole) {
@@ -1032,6 +1114,9 @@ export function AdminScoreForm() {
   const [lineupPositions, setLineupPositions] = useState<Record<string, LineupPosition>>({});
   const [selectedPitchPlayerId, setSelectedPitchPlayerId] = useState("");
   const [swapPlayerId, setSwapPlayerId] = useState("");
+  const [lineupPreviewRows, setLineupPreviewRows] = useState<LineupPreviewRow[]>([]);
+  const [createMissingLineupPlayers, setCreateMissingLineupPlayers] = useState(false);
+  const [lineupImportSaving, setLineupImportSaving] = useState(false);
   const [yellowSuspensionThreshold, setYellowSuspensionThreshold] = useState(readYellowCardSuspensionThreshold);
 
   const teamOptions = useMemo(() => data.teams, [data.teams]);
@@ -1230,9 +1315,10 @@ export function AdminScoreForm() {
   }, []);
 
   useEffect(() => {
-    const nextFormation = (selectedLineupEntries.find((entry) => entry.formation)?.formation ?? "4-3-3") as LineupFormation;
+    const fallbackFormation = defaultLineupFormation(selectedLineupMatch?.sport);
+    const nextFormation = (selectedLineupEntries.find((entry) => entry.formation)?.formation ?? fallbackFormation) as LineupFormation;
     const nextRoles = Object.fromEntries(selectedLineupPlayers.map((player) => [player.id, selectedLineupEntries.find((entry) => entry.playerId === player.id)?.role ?? "reserve"])) as Record<string, MatchLineupRole>;
-    const presetPositions = autoArrangePositions(selectedLineupPlayers, nextRoles, nextFormation, {});
+    const presetPositions = autoArrangePositions(selectedLineupPlayers, nextRoles, nextFormation, {}, selectedLineupMatch?.sport);
     const nextPositions = { ...presetPositions };
 
     selectedLineupEntries.forEach((entry) => {
@@ -1242,11 +1328,13 @@ export function AdminScoreForm() {
     });
 
     queueMicrotask(() => {
-      setLineupFormation(lineupFormations.includes(nextFormation) ? nextFormation : "4-3-3");
+      const allowedFormations = lineupFormationOptions(selectedLineupMatch?.sport);
+      setLineupFormation(allowedFormations.includes(nextFormation) ? nextFormation : fallbackFormation);
       setLineupRoles(nextRoles);
       setLineupPositions(nextPositions);
       setSelectedPitchPlayerId("");
       setSwapPlayerId("");
+      setLineupPreviewRows([]);
     });
     // selectedLineupPlayerKey and selectedLineupEntryKey intentionally carry the array contents.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1291,11 +1379,11 @@ export function AdminScoreForm() {
 
     const status = adminClockStatus(match);
 
-    if (match.sport === "Football" && status === "Half Time") {
+    if (isFootballLikeSport(match.sport) && status === "Half Time") {
       return "HT";
     }
 
-    if (match.sport === "Football" && status === "Full Time") {
+    if (isFootballLikeSport(match.sport) && status === "Full Time") {
       return "90:00";
     }
 
@@ -1823,7 +1911,7 @@ export function AdminScoreForm() {
   }
 
   function lineupRoleLabel(role: MatchLineupRole) {
-    if (role === "starting") return "Starting XI";
+    if (role === "starting") return lineupLabelForSport(selectedLineupMatch?.sport);
     if (role === "substitute") return "Substitute";
     return "Reserve / Not in squad";
   }
@@ -1832,17 +1920,17 @@ export function AdminScoreForm() {
     setLineupRoles((current) => ({ ...current, [playerId]: role }));
     if (role === "starting") {
       setSelectedPitchPlayerId(playerId);
-      setLineupPositions((current) => current[playerId] ? current : autoArrangePositions(selectedLineupPlayers, { ...lineupRoles, [playerId]: role }, lineupFormation, current));
+      setLineupPositions((current) => current[playerId] ? current : autoArrangePositions(selectedLineupPlayers, { ...lineupRoles, [playerId]: role }, lineupFormation, current, selectedLineupMatch?.sport));
     }
   }
 
   function applyFormationPreset(formation: LineupFormation) {
     setLineupFormation(formation);
-    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, formation, current));
+    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, formation, current, selectedLineupMatch?.sport));
   }
 
   function autoArrangeLineup() {
-    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, current));
+    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, current, selectedLineupMatch?.sport));
   }
 
   function moveLineupPlayer(playerId: string, position: LineupPosition) {
@@ -1860,9 +1948,149 @@ export function AdminScoreForm() {
   }
 
   function resetLineupToFormation() {
-    setLineupPositions(autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, {}));
+    setLineupPositions(autoArrangePositions(selectedLineupPlayers, lineupRoles, lineupFormation, {}, selectedLineupMatch?.sport));
     setSelectedPitchPlayerId("");
     setSwapPlayerId("");
+  }
+
+  function buildLineupPreview(rows: LineupImportRow[]) {
+    const seenPlayers = new Set<string>();
+
+    return rows.map<LineupPreviewRow>((row, index) => {
+      const playerName = row.playerName.trim();
+      const number = Number(row.numberText);
+      const role = parseLineupRole(row.roleText, selectedLineupMatch?.sport);
+      const numberMatches = Number.isFinite(number) ? selectedLineupPlayers.filter((player) => player.number === number) : [];
+      const nameMatches = playerName ? selectedLineupPlayers.filter((player) => normalizeSpreadsheetValue(player.name) === normalizeSpreadsheetValue(playerName)) : [];
+      const exactMatches = Number.isFinite(number) && playerName ? selectedLineupPlayers.filter((player) => player.number === number && normalizeSpreadsheetValue(player.name) === normalizeSpreadsheetValue(playerName)) : [];
+      const matches = exactMatches.length > 0 ? exactMatches : nameMatches.length > 0 ? nameMatches : numberMatches;
+      const player = matches.length === 1 ? matches[0] : undefined;
+
+      if (!playerName && !row.numberText.trim()) {
+        return { ...row, rowNumber: index + 2, role, status: "error", message: "Player Name or Number is required." };
+      }
+
+      if (role === "invalid") {
+        return { ...row, rowNumber: index + 2, role, status: "error", message: "Role must be Starter, Substitute, Reserve, Starting XI, or Starting 5." };
+      }
+
+      if (matches.length > 1) {
+        return { ...row, rowNumber: index + 2, role, status: "error", message: "Multiple players matched. Add both number and exact player name." };
+      }
+
+      if (player && seenPlayers.has(player.id)) {
+        return { ...row, rowNumber: index + 2, role, player, status: "error", message: "Duplicate player in import preview." };
+      }
+
+      if (player) {
+        seenPlayers.add(player.id);
+        return { ...row, rowNumber: index + 2, role, player, status: "ready", message: "Matched existing roster player." };
+      }
+
+      return { ...row, rowNumber: index + 2, role, status: "warning", message: "No roster player matched. Enable create missing players to save this row." };
+    });
+  }
+
+  async function handleLineupFile(file?: File) {
+    if (!file || !selectedLineupMatch || !selectedLineupTeam) return;
+
+    try {
+      const rows = parseLineupRows(await parseSpreadsheetRows(file));
+      const preview = buildLineupPreview(rows);
+      setLineupPreviewRows(preview);
+      setMessage(`Parsed ${preview.length} lineup row${preview.length === 1 ? "" : "s"} for ${selectedLineupTeam.name}. ${preview.filter((row) => row.status === "ready").length} matched, ${preview.filter((row) => row.status === "warning").length} missing.`);
+    } catch (error) {
+      setLineupPreviewRows([]);
+      setMessage(error instanceof Error ? error.message : "Could not parse lineup upload.");
+    }
+  }
+
+  function applyLineupPreviewToEditor() {
+    if (!selectedLineupMatch) return;
+
+    const nextRoles = { ...lineupRoles };
+    lineupPreviewRows.forEach((row) => {
+      if (row.player && row.role !== "invalid") {
+        nextRoles[row.player.id] = row.role;
+      }
+    });
+    setLineupRoles(nextRoles);
+    setLineupPositions((current) => autoArrangePositions(selectedLineupPlayers, nextRoles, lineupFormation, current, selectedLineupMatch.sport));
+    setMessage("Applied matched import rows to the lineup editor. Review positions, then save.");
+  }
+
+  async function saveLineupImport() {
+    if (!selectedLineupMatch || !selectedLineupTeam) return;
+
+    const blockingErrors = lineupPreviewRows.filter((row) => row.status === "error");
+    const missingRows = lineupPreviewRows.filter((row) => row.status === "warning");
+    if (blockingErrors.length > 0) {
+      setMessage("Fix import errors before saving lineup rows.");
+      return;
+    }
+
+    if (missingRows.length > 0 && !createMissingLineupPlayers) {
+      setMessage("Some players do not exist. Enable create missing players or remove those rows before saving.");
+      return;
+    }
+
+    const importedStarterCount = lineupPreviewRows.filter((row) => row.role === "starting").length;
+    const starterLimit = startingLimitForSport(selectedLineupMatch.sport);
+    if (importedStarterCount > starterLimit) {
+      setMessage(`${lineupLabelForSport(selectedLineupMatch.sport)} cannot contain more than ${starterLimit} players.`);
+      return;
+    }
+
+    setLineupImportSaving(true);
+    const importedPlayers: Player[] = [];
+
+    for (const row of lineupPreviewRows) {
+      if (row.player) {
+        importedPlayers.push(row.player);
+        continue;
+      }
+
+      if (row.status === "warning" && createMissingLineupPlayers && row.role !== "invalid") {
+        const player: Player = {
+          id: createId("player", `${selectedLineupTeam.name}-${row.playerName || row.numberText}`),
+          tournamentId: selectedLineupTeam.tournamentId ?? selectedLineupMatch.tournamentId ?? selectedTournamentId,
+          teamId: selectedLineupTeam.id,
+          name: row.playerName.trim() || `Player ${row.numberText.trim()}`,
+          number: Number.isFinite(Number(row.numberText)) ? Number(row.numberText) : 0,
+          position: row.position.trim(),
+          stats: Object.fromEntries(playerStatKeys.map((key) => [key, 0])) as Player["stats"]
+        };
+        await savePlayer(player);
+        importedPlayers.push(player);
+      }
+    }
+
+    const roleByPlayerId = new Map<string, MatchLineupRole>();
+    lineupPreviewRows.forEach((row, index) => {
+      const player = importedPlayers[index];
+      if (player && row.role !== "invalid") roleByPlayerId.set(player.id, row.role);
+    });
+
+    const allPlayers = [...selectedLineupPlayers, ...importedPlayers.filter((player) => !selectedLineupPlayers.some((existing) => existing.id === player.id))];
+    const nextRoles = Object.fromEntries(allPlayers.map((player) => [player.id, roleByPlayerId.get(player.id) ?? lineupRoleForPlayer(player.id)])) as Record<string, MatchLineupRole>;
+    const nextPositions = autoArrangePositions(allPlayers, nextRoles, lineupFormation, lineupPositions, selectedLineupMatch.sport);
+    const entries = allPlayers.map((player) => ({
+      tournamentId: selectedLineupMatch.tournamentId ?? selectedTournamentId,
+      matchId: selectedLineupMatch.id,
+      teamId: selectedLineupTeam.id,
+      playerId: player.id,
+      role: nextRoles[player.id],
+      x: nextPositions[player.id]?.x,
+      y: nextPositions[player.id]?.y,
+      formation: lineupFormation
+    }));
+
+    await saveMatchLineups(entries);
+    setLineupRoles(nextRoles);
+    setLineupPositions(nextPositions);
+    setLineupPreviewRows([]);
+    setLineupImportSaving(false);
+    setMessage(`Imported lineup for ${selectedLineupTeam.name}: ${entries.filter((entry) => entry.role === "starting").length} starters saved.`);
   }
 
   function submitMatchLineups(event: React.FormEvent<HTMLFormElement>) {
@@ -1883,9 +2111,10 @@ export function AdminScoreForm() {
       formation: lineupFormation
     }));
     const startingCount = entries.filter((entry) => entry.role === "starting").length;
+    const starterLimit = startingLimitForSport(selectedLineupMatch.sport);
 
-    if (startingCount > 11) {
-      setMessage("Starting XI cannot contain more than 11 players.");
+    if (startingCount > starterLimit) {
+      setMessage(`${lineupLabelForSport(selectedLineupMatch.sport)} cannot contain more than ${starterLimit} players.`);
       return;
     }
 
@@ -1941,7 +2170,7 @@ export function AdminScoreForm() {
       homeScore: selectedScoreMatch.homeScore,
       awayScore: selectedScoreMatch.awayScore,
       periodLabel: selectedScoreMatch.periodLabel,
-      matchMinute: selectedScoreSport === "Football" ? selectedScoreMatch.matchMinute : "",
+      matchMinute: isFootballLikeSport(selectedScoreSport) ? selectedScoreMatch.matchMinute : "",
       clockLabel: clockState.clockLabel ?? (action === "start" || action === "resume" ? "" : selectedScoreMatch.clockLabel),
       clockRunning: clockState.clockRunning,
       clockStartedAt: clockState.clockStartedAt,
@@ -3399,7 +3628,7 @@ export function AdminScoreForm() {
                   #{player.number} {player.name}
                 </p>
                 <p className="text-sm text-slate-400">
-                  {team?.name} - {team?.sport === "Football" ? player.stats.goals : player.stats.points} points / goals
+                  {team?.name} - {isFootballLikeSport(team?.sport) ? player.stats.goals : player.stats.points} points / goals
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button onClick={() => editPlayer(player)} className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold">
@@ -3991,7 +4220,7 @@ export function AdminScoreForm() {
                   ...matchForm,
                   homeTeamId: event.target.value,
                   periodLabel: periodOptionsBySport[nextSport][0],
-                  matchMinute: nextSport === "Football" ? matchForm.matchMinute : ""
+                  matchMinute: isFootballLikeSport(nextSport) ? matchForm.matchMinute : ""
                 });
               }}
               className={inputClass()}
@@ -4065,7 +4294,7 @@ export function AdminScoreForm() {
               ))}
             </select>
           </label>
-          {matchFormSport === "Football" ? (
+          {isFootballLikeSport(matchFormSport) ? (
           <label>
             <span className={labelClass()}>Match minute</span>
             <input value={matchForm.matchMinute ?? ""} onChange={(event) => setMatchForm({ ...matchForm, matchMinute: event.target.value })} className={inputClass()} placeholder="12' or 45+2'" />
@@ -4077,7 +4306,7 @@ export function AdminScoreForm() {
               value={matchForm.clockLabel ?? ""}
               onChange={(event) => setMatchForm({ ...matchForm, clockLabel: event.target.value })}
               className={inputClass()}
-              placeholder={matchFormSport === "Football" ? "37', 45+2', HT" : matchFormSport === "Basketball" ? "Q1 08:42" : "Set 1"}
+              placeholder={isFootballLikeSport(matchFormSport) ? "37', 45+2', HT" : matchFormSport === "Basketball" ? "Q1 08:42" : "Set 1"}
             />
           </label>
           <label className="md:col-span-2">
@@ -4247,7 +4476,7 @@ export function AdminScoreForm() {
 
       <section className={adminPanelClass("lineups")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          {sectionTitle("Match lineup management", "Set match-day Starting XI, substitutes, and reserves per football fixture. These roles power the public Lineups tab.")}
+          {sectionTitle("Match lineup management", "Set match-day starters, substitutes, and reserves per football or futsal fixture. These roles power the public Lineups tab.")}
           {selectedLineupMatch ? sportBadge(selectedLineupMatch.sport) : null}
         </div>
         <form onSubmit={submitMatchLineups} className="grid gap-5">
@@ -4277,8 +4506,86 @@ export function AdminScoreForm() {
               </select>
             </label>
           </div>
-          {selectedLineupMatch?.sport === "Football" && selectedLineupTeam ? (
+          {isFootballLikeSport(selectedLineupMatch?.sport) && selectedLineupTeam ? (
             <>
+              <div className="grid gap-4 rounded-xl border border-blue-100 bg-white p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+                <label>
+                  <span className={labelClass()}>Upload lineup Excel / CSV</span>
+                  <input
+                    type="file"
+                    accept=".csv,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={(event) => void handleLineupFile(event.target.files?.[0])}
+                    className={`${inputClass()} file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-blue-700`}
+                  />
+                </label>
+                <a href={lineupTemplateHref("Football")} download="orso-football-lineup-template.csv" className="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-sm font-black text-blue-700 hover:bg-blue-100">
+                  Football template
+                </a>
+                <a href={lineupTemplateHref("Futsal")} download="orso-futsal-lineup-template.csv" className="min-h-11 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">
+                  Futsal template
+                </a>
+                <label className="flex items-center gap-2 lg:col-span-3">
+                  <input type="checkbox" checked={createMissingLineupPlayers} onChange={(event) => setCreateMissingLineupPlayers(event.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                  <span className="text-sm font-bold text-slate-600">Create missing players from valid warning rows when saving import</span>
+                </label>
+                <p className="text-sm font-semibold text-slate-400 lg:col-span-3">Required headers: {lineupImportHeaders.join(", ")}. Roles: Starting XI, Starting 5, Starter, Substitute, Reserve.</p>
+              </div>
+
+              {lineupPreviewRows.length > 0 ? (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-950">Import preview</p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        {lineupPreviewRows.filter((row) => row.status === "ready").length} matched / {lineupPreviewRows.filter((row) => row.status === "warning").length} missing / {lineupPreviewRows.filter((row) => row.status === "error").length} errors
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={applyLineupPreviewToEditor} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                        Apply matched rows
+                      </button>
+                      <button type="button" onClick={() => void saveLineupImport()} disabled={lineupImportSaving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                        {lineupImportSaving ? "Saving..." : "Save import"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-400">
+                        <tr>
+                          <th className="px-4 py-3">Row</th>
+                          <th className="px-4 py-3">Number</th>
+                          <th className="px-4 py-3">Player</th>
+                          <th className="px-4 py-3">Position</th>
+                          <th className="px-4 py-3">Role</th>
+                          <th className="px-4 py-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {lineupPreviewRows.map((row) => (
+                          <tr key={`${row.rowNumber}-${row.playerName}-${row.numberText}`}>
+                            <td className="px-4 py-3 font-bold text-slate-500">{row.rowNumber}</td>
+                            <td className="px-4 py-3 font-black text-slate-900">{row.numberText || "-"}</td>
+                            <td className="px-4 py-3">
+                              <p className="font-black text-slate-950">{row.player?.name ?? (row.playerName || "Missing player")}</p>
+                              {row.player ? <p className="text-xs font-semibold text-blue-600">Matched roster player</p> : null}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">{row.position || row.player?.position || "-"}</td>
+                            <td className="px-4 py-3 font-bold text-slate-700">{row.role === "invalid" ? row.roleText || "-" : lineupRoleLabel(row.role)}</td>
+                            <td className="px-4 py-3">
+                              <span className={clsx("rounded-full px-2.5 py-1 text-xs font-black uppercase", row.status === "ready" ? "bg-emerald-100 text-emerald-700" : row.status === "warning" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700")}>
+                                {row.status}
+                              </span>
+                              <p className="mt-1 text-xs font-semibold text-slate-500">{row.message}</p>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 sm:grid-cols-3">
                 {(["starting", "substitute", "reserve"] as MatchLineupRole[]).map((role) => (
                   <div key={role} className="rounded-lg bg-white px-3 py-2">
@@ -4296,7 +4603,7 @@ export function AdminScoreForm() {
                     <label className="min-w-44 flex-1">
                       <span className={labelClass()}>Formation preset</span>
                       <select value={lineupFormation} onChange={(event) => applyFormationPreset(event.target.value as LineupFormation)} className={inputClass()}>
-                        {lineupFormations.map((formation) => (
+                        {lineupFormationOptions(selectedLineupMatch?.sport).map((formation) => (
                           <option key={formation} value={formation}>{formation}</option>
                         ))}
                       </select>
@@ -4342,7 +4649,7 @@ export function AdminScoreForm() {
                           {lineupPositions[player.id] ? <p className="mt-1 text-xs font-black text-blue-600">x {Math.round(lineupPositions[player.id].x)} / y {Math.round(lineupPositions[player.id].y)}</p> : null}
                         </button>
                         <select value={lineupRoleForPlayer(player.id)} onChange={(event) => setLineupRole(player.id, event.target.value as MatchLineupRole)} className="orso-input mt-0 min-w-48">
-                          <option value="starting">Starting XI</option>
+                          <option value="starting">{lineupLabelForSport(selectedLineupMatch?.sport)}</option>
                           <option value="substitute">Substitute</option>
                           <option value="reserve">Reserve / Not in squad</option>
                         </select>
@@ -4360,15 +4667,15 @@ export function AdminScoreForm() {
               </div>
             </>
           ) : (
-            <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">Select a football match to manage lineups.</p>
+            <p className="rounded-lg border border-dashed border-blue-200 bg-blue-50 px-4 py-5 text-sm font-semibold text-blue-700">Select a football or futsal match to manage lineups.</p>
           )}
         </form>
       </section>
 
-      {selectedEventSport === "Football" ? (
+      {isFootballLikeSport(selectedEventSport) ? (
       <section className={adminPanelClass("timeline")}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          {sectionTitle("Live timeline", "Add football goals, cards, and substitutions for the selected tournament. Public match pages read these events live.")}
+          {sectionTitle("Live timeline", "Add football and futsal goals, cards, and substitutions for the selected tournament. Public match pages read these events live.")}
         </div>
         <form onSubmit={submitEvent} className="grid gap-4 md:grid-cols-6">
           <label className="md:col-span-2">
@@ -4574,18 +4881,18 @@ export function AdminScoreForm() {
             </select>
           </label>
           <label>
-            <span className={labelClass()}>{selectedScoreSport === "Football" ? "Special clock override" : "Clock label"}</span>
+            <span className={labelClass()}>{isFootballLikeSport(selectedScoreSport) ? "Special clock override" : "Clock label"}</span>
             <input
               name="clockLabel"
               defaultValue={
-                selectedScoreSport === "Football"
+                isFootballLikeSport(selectedScoreSport)
                   ? isFootballClockOverride(selectedScoreMatch?.clockLabel) ? selectedScoreMatch?.clockLabel : ""
                   : selectedScoreMatch ? formatMatchClock(selectedScoreMatch) : ""
               }
               className={inputClass()}
-              placeholder={selectedScoreSport === "Football" ? "HT, FT, Extra time, Penalties" : selectedScoreSport === "Basketball" ? "Q1 08:42" : "Set 1"}
+              placeholder={isFootballLikeSport(selectedScoreSport) ? "HT, FT, Extra time, Penalties" : selectedScoreSport === "Basketball" ? "Q1 08:42" : "Set 1"}
             />
-            {selectedScoreSport === "Football" ? <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank during normal play. The timer generates 1&apos;, 45+1&apos;, and 90+3&apos; automatically.</span> : null}
+            {isFootballLikeSport(selectedScoreSport) ? <span className="mt-1 block text-xs font-semibold text-slate-400">Leave blank during normal play. The timer generates 1&apos;, 45+1&apos;, and 90+3&apos; automatically.</span> : null}
           </label>
           {selectedScoreSport === "Basketball" ? (
           <label>
@@ -4601,7 +4908,7 @@ export function AdminScoreForm() {
             <button type="button" onClick={() => applyClockAction("start")} className={scorerControlButtonClass("green")}>
               Start clock
             </button>
-            {selectedScoreSport === "Football" ? (
+            {isFootballLikeSport(selectedScoreSport) ? (
               <button type="button" onClick={startFootballSecondHalf} className={scorerControlButtonClass("green")}>
                 Start second half
               </button>
@@ -4621,7 +4928,7 @@ export function AdminScoreForm() {
             </button>
           </div>
         </form>
-        {selectedScoreSport === "Football" ? (
+        {isFootballLikeSport(selectedScoreSport) ? (
           <form onSubmit={submitSubstitution} className="mt-5 grid gap-4 rounded-xl border border-blue-100 bg-blue-50 p-4 md:grid-cols-6">
             <div className="md:col-span-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -4642,7 +4949,7 @@ export function AdminScoreForm() {
             <label className="md:col-span-2">
               <span className={labelClass()}>Match</span>
               <select value={selectedSubstitutionMatch?.id ?? ""} onChange={(event) => setSubstitutionForm({ ...substitutionForm, matchId: event.target.value, teamId: "", playerInId: "", playerOutId: "" })} className={inputClass()}>
-                {scoreMatches.filter((match) => match.sport === "Football").map((match) => {
+                {scoreMatches.filter((match) => isFootballLikeSport(match.sport)).map((match) => {
                   const home = data.teams.find((team) => team.id === match.homeTeamId);
                   const away = data.teams.find((team) => team.id === match.awayTeamId);
                   return (

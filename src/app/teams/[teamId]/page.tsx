@@ -9,7 +9,7 @@ import { Card, PageHeader, TeamLogo } from "@/components/ui";
 import { teamMatches, teamPlayers } from "@/lib/data-store";
 import { disciplinaryRows } from "@/lib/disciplinary";
 import { useTournamentData } from "@/hooks/use-tournament-data";
-import type { Player, PlayerStatKey } from "@/lib/types";
+import { isFootballLikeSport, type Player, type PlayerStatKey } from "@/lib/types";
 
 function playerInitials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "P";
@@ -24,7 +24,7 @@ function PlayerAvatar({ player }: { player: Player }) {
 }
 
 function scoringStatForSport(sport: string): PlayerStatKey {
-  return sport === "Football" ? "goals" : "points";
+  return isFootballLikeSport(sport) ? "goals" : "points";
 }
 
 function PlayerLeaderList({ title, label, rows }: { title: string; label: string; rows: { player: Player; total: number }[] }) {

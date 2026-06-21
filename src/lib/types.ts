@@ -1,5 +1,8 @@
-export const sportOptions = ["Volleyball", "Basketball", "Football"] as const;
+export const sportOptions = ["Volleyball", "Basketball", "Football", "Futsal"] as const;
 export type Sport = (typeof sportOptions)[number];
+export function isFootballLikeSport(sport?: string): sport is "Football" | "Futsal" {
+  return sport === "Football" || sport === "Futsal";
+}
 export type MatchStatus = "Scheduled" | "Live" | "Final";
 export type UserRole = "admin" | "scorer" | "viewer" | "club_admin";
 export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
@@ -26,6 +29,7 @@ export const playerStatKeys = ["points", "goals", "assists", "rebounds", "blocks
 export type PlayerStatKey = (typeof playerStatKeys)[number];
 export const playerStatsBySport = {
   Football: ["goals", "assists", "yellow_cards", "red_cards"],
+  Futsal: ["goals", "assists", "yellow_cards", "red_cards"],
   Basketball: ["points", "assists", "rebounds", "blocks"],
   Volleyball: ["points", "aces", "digs", "blocks"]
 } as const satisfies Record<Sport, readonly PlayerStatKey[]>;

@@ -7,7 +7,7 @@ import { LiveUpdateIndicator } from "@/components/live-update-indicator";
 import { PageHeader, TeamLogo } from "@/components/ui";
 import { buildStandings, getTeam, type TournamentData } from "@/lib/data-store";
 import { useTournamentData } from "@/hooks/use-tournament-data";
-import type { Player, PlayerStatKey, Team } from "@/lib/types";
+import { isFootballLikeSport, type Player, type PlayerStatKey, type Team } from "@/lib/types";
 
 type StandingsTab = "teams" | "scorers" | "assists";
 
@@ -37,7 +37,7 @@ function PlayerAvatar({ player }: { player: Player }) {
 }
 
 function scoringStatForTeam(team?: Team): PlayerStatKey {
-  return team?.sport === "Football" ? "goals" : "points";
+  return isFootballLikeSport(team?.sport) ? "goals" : "points";
 }
 
 function TeamStandingsTable({ data }: { data: TournamentData }) {

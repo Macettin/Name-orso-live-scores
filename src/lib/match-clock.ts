@@ -1,4 +1,4 @@
-import type { Match } from "./types";
+import { isFootballLikeSport, type Match } from "./types";
 
 const basketballDefaultSeconds = 10 * 60;
 
@@ -93,7 +93,7 @@ export function getClockStateForAction(match: Match, action: "start" | "pause" |
   }
 
   if (action === "reset") {
-    const resetSeconds = match.sport === "Basketball" ? countdownSeconds : match.sport === "Football" ? footballStartSeconds(match) : 0;
+  const resetSeconds = match.sport === "Basketball" ? countdownSeconds : isFootballLikeSport(match.sport) ? footballStartSeconds(match) : 0;
     return {
       clockRunning: false,
       clockStartedAt: undefined,
@@ -105,7 +105,7 @@ export function getClockStateForAction(match: Match, action: "start" | "pause" |
   return {
     clockRunning: true,
     clockStartedAt: new Date(now).toISOString(),
-    clockBaseSeconds: action === "start" ? (match.sport === "Basketball" ? countdownSeconds : match.sport === "Football" ? footballStartSeconds(match) : 0) : currentSeconds,
+    clockBaseSeconds: action === "start" ? (match.sport === "Basketball" ? countdownSeconds : isFootballLikeSport(match.sport) ? footballStartSeconds(match) : 0) : currentSeconds,
     clockCountdownSeconds: countdownSeconds
   };
 }

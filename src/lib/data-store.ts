@@ -409,7 +409,8 @@ export function buildStandings(data: TournamentData): Standing[] {
   const winPointsBySport: Record<Team["sport"], number> = {
     Volleyball: 3,
     Basketball: 2,
-    Football: 3
+    Football: 3,
+    Futsal: 3
   };
 
   return data.teams.map((team) => {

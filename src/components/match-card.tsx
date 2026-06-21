@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { clsx } from "clsx";
 import { getTeam } from "@/lib/data-store";
-import type { Match, Team } from "@/lib/types";
+import { isFootballLikeSport, type Match, type Team } from "@/lib/types";
 import { Card, StatusPill, TeamLogo } from "./ui";
 import { YouTubeEmbed } from "./youtube-embed";
 
@@ -42,7 +42,7 @@ export function MatchCard({ match, teams }: { match: Match; teams?: Team[] }) {
   const lookupData = { tournaments: [], teams: teamData, players: [], matches: [], events: [], matchLineups: [], playerMatchStats: [], matchTeamStats: [], officials: [], matchOfficials: [], tournamentApplications: [], newsPosts: [], mediaItems: [], sponsors: [], teamStaff: [], adminNotificationReads: [] };
   const home = getTeam(lookupData, match.homeTeamId);
   const away = getTeam(lookupData, match.awayTeamId);
-  const isFootball = match.sport === "Football";
+  const isFootball = isFootballLikeSport(match.sport);
   const footballTime = isFootball ? getFootballMatchTime(match) : null;
   const previousScore = useRef({ home: match.homeScore, away: match.awayScore });
   const [highlightTeam, setHighlightTeam] = useState<"home" | "away" | null>(null);
