@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { matchTeamStatKeys, playerStatKeys, type AdminNotificationRead, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type MediaItem, type MediaType, type NewsCategory, type NewsPost, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Sponsor, type SponsorTier, type Team, type TeamAdmin, type TeamAdminAssignment, type TeamStaff, type TeamStaffRole, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
+import { matchTeamStatKeys, playerStatKeys, toTournamentSportType, type AdminNotificationRead, type Match, type MatchEvent, type MatchEventType, type MatchLineupEntry, type MatchLineupRole, type MatchOfficialAssignment, type MatchPhase, type MatchStatus, type MatchTeamStatKey, type MatchTeamStats, type MediaItem, type MediaType, type NewsCategory, type NewsPost, type Official, type OfficialRole, type Player, type PlayerMatchStat, type PlayerStatKey, type RosterStatus, type Sponsor, type SponsorTier, type Team, type TeamAdmin, type TeamAdminAssignment, type TeamStaff, type TeamStaffRole, type Tournament, type TournamentApplication, type TournamentApplicationStatus, type TournamentStatus, type TournamentSportType, type UserProfile } from "./types";
 import { normalizeMatch, slugify, type TournamentData } from "./data-store";
 import { getYouTubeEmbedUrl } from "./youtube";
 
@@ -868,11 +868,13 @@ export async function assignSupabaseClubAdmin(email: string, teamId: string) {
 export async function saveSupabaseTournament(tournament: Tournament) {
   const supabase = getSupabaseClient();
   if (!supabase) throw new Error("Supabase is not configured.");
+  const sportType = toTournamentSportType(tournament.sportType);
+  if (!sportType) throw new Error(`Invalid tournament sport type: ${tournament.sportType}`);
 
   const { error } = await supabase.from("tournaments").upsert({
     id: tournament.id,
     name: tournament.name,
-    sport_type: tournament.sportType,
+    sport_type: sportType,
     location: tournament.location || null,
     start_date: tournament.startDate || null,
     end_date: tournament.endDate || null,

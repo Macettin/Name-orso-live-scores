@@ -25,6 +25,7 @@ import {
   teamStaffRoleOptions,
   tournamentSportOptions,
   tournamentApplicationStatusOptions,
+  toTournamentSportType,
   type Match,
   type MatchEvent,
   type MatchLineupEntry,
@@ -1621,16 +1622,23 @@ export function AdminScoreForm() {
     setMessage(`Deleted staff member: ${staff.name}`);
   }
 
-  function submitTournament(event: React.FormEvent<HTMLFormElement>) {
+  async function submitTournament(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!tournamentForm.name.trim()) {
       return;
     }
 
+    const sportType = toTournamentSportType(tournamentForm.sportType);
+    if (!sportType) {
+      setMessage("Select a valid tournament sport: Mixed, Volleyball, Basketball, Football, or Futsal.");
+      return;
+    }
+
     const tournament: Tournament = {
       ...tournamentForm,
       id: tournamentForm.id || createId("tournament", tournamentForm.name),
+      sportType,
       name: tournamentForm.name.trim(),
       location: tournamentForm.location.trim(),
       logoUrl: tournamentForm.logoUrl?.trim() || undefined,
@@ -1639,10 +1647,14 @@ export function AdminScoreForm() {
       sponsorLogoUrl: tournamentForm.sponsorLogoUrl?.trim() || undefined
     };
 
-    saveTournament(tournament);
-    setSelectedTournamentId(tournament.id);
-    setTournamentForm(emptyTournament);
-    setMessage(`Saved tournament: ${tournament.name}`);
+    try {
+      await saveTournament(tournament);
+      setSelectedTournamentId(tournament.id);
+      setTournamentForm(emptyTournament);
+      setMessage(`Saved tournament: ${tournament.name}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save tournament.");
+    }
   }
 
   async function submitTeam(event: React.FormEvent<HTMLFormElement>) {
@@ -2911,7 +2923,14 @@ export function AdminScoreForm() {
           </label>
           <label>
             <span className={labelClass()}>Sport type</span>
-            <select value={tournamentForm.sportType} onChange={(event) => setTournamentForm({ ...tournamentForm, sportType: event.target.value as TournamentSportType })} className={inputClass()}>
+            <select
+              value={tournamentForm.sportType}
+              onChange={(event) => {
+                const sportType = toTournamentSportType(event.target.value);
+                if (sportType) setTournamentForm({ ...tournamentForm, sportType });
+              }}
+              className={inputClass()}
+            >
               {tournamentSportOptions.map((sportType) => (
                 <option key={sportType} value={sportType}>
                   {sportType}

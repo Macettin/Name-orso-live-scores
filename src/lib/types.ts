@@ -8,6 +8,9 @@ export type UserRole = "admin" | "scorer" | "viewer" | "club_admin";
 export type TournamentStatus = "Scheduled" | "Live" | "Final" | "Archived";
 export const tournamentSportOptions = ["Mixed", ...sportOptions] as const;
 export type TournamentSportType = (typeof tournamentSportOptions)[number];
+export function toTournamentSportType(value: string): TournamentSportType | null {
+  return tournamentSportOptions.find((sportType) => sportType === value) ?? null;
+}
 export const matchPhaseOptions = ["Group Stage", "Quarter Final", "Semi Final", "Final", "3rd Place Match", "Placement Matches"] as const;
 export type MatchPhase = (typeof matchPhaseOptions)[number];
 export const officialRoleOptions = ["referee", "assistant referee", "fourth official", "table official", "commissioner"] as const;
