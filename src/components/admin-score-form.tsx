@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
-import { AlertCircle, Bell, CheckCircle2, Copy, Eye, Gauge, ImageUp, ListChecks, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, Trash2, Unlock, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Copy, Eye, Gauge, ImageUp, ListChecks, Lock, LogOut, Mail, MessageCircle, Moon, Pencil, Plus, Printer, Save, Sun, TentTree, Trash2, Unlock, X } from "lucide-react";
 import { createId, getMatchTeamStats, slugify, type TournamentData } from "@/lib/data-store";
 import { TeamLogo } from "@/components/ui";
 import { disciplinaryRowForPlayer, disciplinaryRows, readYellowCardSuspensionThreshold, yellowCardSuspensionThresholdStorageKey } from "@/lib/disciplinary";
@@ -329,8 +329,16 @@ const adminSectionGroups: {
   {
     title: "Teams & Rosters",
     description: "Manage clubs, players, lineups, and approvals.",
-    sections: ["teams", "players", "team_staff", "lineups", "club_admins", "roster_approvals", "applications"],
-    links: [{ label: "Camp Applications", href: "/admin/camps" }]
+    sections: ["teams", "players", "team_staff", "lineups", "club_admins", "roster_approvals", "applications"]
+  },
+  {
+    title: "Registrations",
+    description: "Review camp requests and open the public registration form.",
+    sections: [],
+    links: [
+      { label: "Camp Applications", href: "/admin/camps" },
+      { label: "Public Camp Registration", href: "/camps/apply" }
+    ]
   },
   {
     title: "Match Operations",
@@ -2537,19 +2545,28 @@ export function AdminScoreForm() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             {canManageAll ? (
-              <button
-                type="button"
-                onClick={() => setActiveAdminSection("notifications")}
-                className="relative inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 sm:w-auto"
-              >
-                <Bell size={16} aria-hidden="true" />
-                Notifications
-                {unreadNotifications.length > 0 ? (
-                  <span className="absolute -right-2 -top-2 min-w-6 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-xs font-black text-white ring-2 ring-white">
-                    {unreadNotifications.length}
-                  </span>
-                ) : null}
-              </button>
+              <>
+                <Link
+                  href="/admin/camps"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-700 sm:w-auto"
+                >
+                  <TentTree size={16} aria-hidden="true" />
+                  Camp Applications
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminSection("notifications")}
+                  className="relative inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 sm:w-auto"
+                >
+                  <Bell size={16} aria-hidden="true" />
+                  Notifications
+                  {unreadNotifications.length > 0 ? (
+                    <span className="absolute -right-2 -top-2 min-w-6 rounded-full bg-red-600 px-1.5 py-0.5 text-center text-xs font-black text-white ring-2 ring-white">
+                      {unreadNotifications.length}
+                    </span>
+                  ) : null}
+                </button>
+              </>
             ) : null}
             <button
               type="button"
@@ -2617,7 +2634,17 @@ export function AdminScoreForm() {
                     </button>
                   ))}
                   {groupLinks.map((link) => (
-                    <Link key={link.href} href={link.href} className="inline-flex min-h-10 items-center rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={clsx(
+                        "inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-black transition",
+                        link.href === "/admin/camps"
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20 hover:bg-blue-700"
+                          : "border border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                      )}
+                    >
+                      {link.href === "/admin/camps" ? <TentTree size={16} aria-hidden="true" /> : null}
                       {link.label}
                     </Link>
                   ))}

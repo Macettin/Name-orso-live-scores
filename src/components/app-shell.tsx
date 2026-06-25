@@ -14,7 +14,7 @@ const navItems = [
   { href: "/teams", label: "Teams", icon: Shield },
   { href: "/players", label: "Players", icon: Users },
   { href: "/apply", label: "Apply", icon: UserPlus },
-  { href: "/camps/apply", label: "Camps", icon: TentTree },
+  { href: "/camps/apply", label: "Camp Registration", icon: TentTree },
   { href: "/admin", label: "Admin", icon: ClipboardPenLine }
 ];
 
