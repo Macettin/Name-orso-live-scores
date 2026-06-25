@@ -329,7 +329,8 @@ const adminSectionGroups: {
   {
     title: "Teams & Rosters",
     description: "Manage clubs, players, lineups, and approvals.",
-    sections: ["teams", "players", "team_staff", "lineups", "club_admins", "roster_approvals", "applications"]
+    sections: ["teams", "players", "team_staff", "lineups", "club_admins", "roster_approvals", "applications"],
+    links: [{ label: "Camp Applications", href: "/admin/camps" }]
   },
   {
     title: "Match Operations",

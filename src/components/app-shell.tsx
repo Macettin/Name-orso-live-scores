@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, Home, MessageCircle, Shield, Trophy, UserPlus, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Camera, ClipboardPenLine, Home, MessageCircle, Shield, TentTree, Trophy, UserPlus, Users } from "lucide-react";
 import { useTournamentData } from "@/hooks/use-tournament-data";
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/teams", label: "Teams", icon: Shield },
   { href: "/players", label: "Players", icon: Users },
   { href: "/apply", label: "Apply", icon: UserPlus },
+  { href: "/camps/apply", label: "Camps", icon: TentTree },
   { href: "/admin", label: "Admin", icon: ClipboardPenLine }
 ];
 
@@ -134,6 +135,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-400 lg:justify-end">
               <Link href="/help" className="font-black text-blue-700 transition hover:text-blue-800">
                 Help / Manuals
+              </Link>
+              <Link href="/camps/apply" className="font-black text-blue-700 transition hover:text-blue-800">
+                Camp Registration
               </Link>
               <p>Your digital sports event platform.</p>
             </div>
